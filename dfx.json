@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "canisters": {
+    "forecast_live_backend": {
+      "main": "src/forecast_live_backend/main.mo",
+      "type": "motoko"
+    },
+    "forecast_live_frontend": {
+      "dependencies": [
+        "forecast_live_backend"
+      ],
+      "frontend": {
+        "entrypoint": "src/forecast_live_frontend/src/index.html"
+      },
+      "source": [
+        "src/forecast_live_frontend/assets",
+        "dist/forecast_live_frontend/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env"
+}

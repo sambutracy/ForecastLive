@@ -1,0 +1,86 @@
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+fastf1_cache/
+f1_data_service/fastf1_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+sdist/
+var/
+wheels/
+
+# Node.js and React specific
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.cache/
+coverage/
+build/
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.tgz
+.yarn-integrity
+
+# Internet Computer / Dfinity
+.dfx/
+.vessel/
+.azle/
+.ic-assets/
+canister_ids.json
+canister_ids.local.json
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.history/
+*.sublime-workspace
+*.sublime-project
+.project
+.classpath
+.settings/
+*.iml
+*.ipr
+*.iws
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# F1 Data Service specific
+f1_data_service/fastf1_cache/
+f1_data_service/__pycache__/
+f1_data_service/*.pyc
