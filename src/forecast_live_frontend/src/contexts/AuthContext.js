@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Principal } from '@dfinity/principal';
-// We'll use a dynamic import approach for NFID to handle dependency issues
+import { AuthClient } from '@dfinity/auth-client';
 import appConfig from '../config/appConfig';
 
 const AuthContext = createContext();
@@ -16,21 +16,31 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [identity, setIdentity] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authType, setAuthType] = useState(null); // 'nfid' or 'mock'
-  const [nfidModule, setNfidModule] = useState(null);
   const [nfidClient, setNfidClient] = useState(null);
   const [nfidError, setNfidError] = useState(null);
 
   // Initialize authentication when component mounts
   useEffect(() => {
-    initAuth();
+    try {
+      console.log('AuthContext: initializing authentication');
+      initAuth();
+    } catch (error) {
+      console.error('AuthContext initialization error:', error);
+      // Fall back to mock authentication if there's an error
+      if (appConfig?.auth?.useMockAuth) {
+        console.log('Falling back to mock authentication');
+        setupMockAuth();
+      }
+    }
   }, []);
 
   // Check for any stored authentication from previous session
   const initAuth = async () => {
     try {
-      console.log('Initializing NFID authentication...');
+      console.log('Initializing authentication...');
       
       // Check for stored auth type from previous session
       const storedAuthType = localStorage.getItem('forecastLive_authType');
@@ -39,39 +49,93 @@ export function AuthProvider({ children }) {
       // First check if we should use mock authentication
       if (appConfig.auth.useMockAuth) {
         console.log('Using mock authentication for development');
-        loginWithMock();
+        setupMockAuth();
         return;
       }
       
-      // Load NFID module dynamically to handle potential dependency issues
-      try {
-        // We'll use dynamic import for NFID to handle dependency issues
-        console.log('Loading NFID module...');
-        
-        // For now, since we have dependency issues, we'll use mock auth
-        console.log('NFID module couldn\'t be loaded due to dependency issues.');
-        console.log('Using mock authentication as fallback.');
-        
-        // In development, we fall back to mock authentication
-        if (process.env.NODE_ENV !== 'production') {
-          loginWithMock();
-        } else {
+      // Try to resume session from NFID if that was the previous auth type
+      if (storedAuthType === 'nfid') {
+        try {
+          // When implementing NFID, handle session restoration here
+          console.log('NFID sessions not fully implemented yet');
+          // If we can't restore NFID session in development, use mock auth
+          if (process.env.NODE_ENV !== 'production') {
+            setupMockAuth();
+          } else {
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error('Failed to restore NFID session:', error);
           setLoading(false);
-          setNfidError('NFID authentication is currently unavailable. Please try again later.');
         }
-      } catch (error) {
-        console.error('Failed to load NFID module:', error);
-        // In development, we fall back to mock authentication
-        if (process.env.NODE_ENV !== 'production') {
-          loginWithMock();
-        } else {
-          setLoading(false);
-          setNfidError('NFID authentication is currently unavailable. Please try again later.');
-        }
+      } else {
+        // No previous session or not using NFID
+        setLoading(false);
       }
     } catch (error) {
       console.error('Auth initialization error:', error);
       setLoading(false);
+    }
+  };
+  
+  // Setup for mock authentication in development mode
+  const setupMockAuth = () => {
+    // Create a mock principal
+    const mockPrincipal = 'rrkah-fqaaa-aaaaa-aaaaq-cai';
+    
+    try {
+      // Create a Principal object for our mock
+      const principalObj = Principal.fromText(mockPrincipal);
+      
+      // Create a mock identity that returns our principal
+      const mockIdentity = {
+        getPrincipal: () => principalObj,
+        _principal: principalObj
+      };
+      
+      // Set up the user with the mock principal
+      setUser({
+        principal: principalObj,
+        principalText: mockPrincipal,
+        name: 'Development User',
+        email: 'dev@example.com',
+        authType: 'mock'
+      });
+      
+      // Store the identity for use with the ActorConfig
+      setIdentity(mockIdentity);
+      setIsAuthenticated(true);
+      setAuthType('mock');
+      setLoading(false);
+      
+      // Store auth type in localStorage for persistence
+      localStorage.setItem('forecastLive_authType', 'mock');
+      console.log('Mock authentication setup complete with identity:', mockIdentity);
+    } catch (error) {
+      console.error('Error setting up mock auth:', error);
+      // Fallback to simpler mock if Principal creation fails
+      const simpleObj = {
+        toText: () => mockPrincipal,
+        toString: () => mockPrincipal
+      };
+      
+      const simpleIdentity = {
+        getPrincipal: () => simpleObj
+      };
+      
+      setUser({
+        principal: simpleObj,
+        principalText: mockPrincipal,
+        name: 'Development User',
+        email: 'dev@example.com',
+        authType: 'mock'
+      });
+      
+      setIdentity(simpleIdentity);
+      setIsAuthenticated(true);
+      setAuthType('mock');
+      setLoading(false);
+      localStorage.setItem('forecastLive_authType', 'mock');
     }
   };
 
@@ -79,20 +143,32 @@ export function AuthProvider({ children }) {
   const loginWithNFID = async () => {
     try {
       setLoading(true);
+      setNfidError(null);
       
       if (appConfig.auth.useMockAuth) {
+        console.log('Using mock auth instead of NFID due to config');
         return loginWithMock();
       }
       
-      // Dynamic NFID authentication implementation will go here
-      console.log('NFID authentication temporarily disabled due to dependency issues');
+      // In a real implementation, we would:
+      // 1. Import the NFID client
+      // 2. Configure it with our app settings
+      // 3. Handle the login flow
+      // 4. Store the identity and principal
+      
+      console.log('NFID authentication not fully implemented');
       console.log('Using mock authentication instead');
       
-      // For now, we use mock authentication
-      loginWithMock();
+      // For now, we use mock authentication in development
+      if (process.env.NODE_ENV !== 'production') {
+        loginWithMock();
+      } else {
+        setLoading(false);
+        setNfidError('NFID authentication is not fully implemented yet.');
+      }
     } catch (error) {
       console.error('NFID Login error:', error);
-      alert(`Login failed: ${error.message || 'Unknown error during NFID authentication'}`);
+      setNfidError(error.message || 'Unknown error during NFID authentication');
       setLoading(false);
     }
   };
@@ -100,27 +176,10 @@ export function AuthProvider({ children }) {
   // Mock authentication for development
   const loginWithMock = async () => {
     setLoading(true);
+    // Simulate a network delay
     setTimeout(() => {
-      console.log('Setting up mock authentication with principal:', appConfig.auth.mockPrincipal);
-      
-      const mockPrincipal = {
-        getPrincipal: () => ({
-          toText: () => appConfig.auth.mockPrincipal
-        })
-      };
-      
-      setUser({
-        principal: mockPrincipal.getPrincipal(),
-        principalText: mockPrincipal.getPrincipal().toText(),
-        authType: 'mock'
-      });
-      setIsAuthenticated(true);
-      setAuthType('mock');
-      setLoading(false);
-      
-      // Store auth type in localStorage for persistence
-      localStorage.setItem('forecastLive_authType', 'mock');
-    }, 1000);
+      setupMockAuth();
+    }, 800);
   };
 
   // Main login function - for now defaults to NFID or mock
@@ -150,6 +209,7 @@ export function AuthProvider({ children }) {
       // Clear auth state
       setIsAuthenticated(false);
       setUser(null);
+      setIdentity(null);
       setAuthType(null);
       
       // Clear any stored authentication data
@@ -165,6 +225,7 @@ export function AuthProvider({ children }) {
   const value = {
     isAuthenticated,
     user,
+    identity,
     loading,
     authType,
     login,

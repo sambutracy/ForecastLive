@@ -25,8 +25,8 @@ ChartJS.register(
 );
 
 function Dashboard() {
-  const { user } = useAuth();
-  const { actor } = useCanister();
+  const { user, authType, isAuthenticated } = useAuth();
+  const { actor, isActorAvailable } = useCanister();
   const { 
     currentRace, 
     liveRaceData, 
@@ -38,6 +38,7 @@ function Dashboard() {
   const [currentLap, setCurrentLap] = useState(1);
   const [leaderboard, setLeaderboard] = useState([]);
   const [raceData, setRaceData] = useState([]);
+  const [showDeveloperInfo, setShowDeveloperInfo] = useState(true);
   const [isRaceRunning, setIsRaceRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [allPredictions, setAllPredictions] = useState([]);

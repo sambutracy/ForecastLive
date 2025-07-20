@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const webpack = require('webpack');
 
 module.exports = {
   entry: './src/index.js',
@@ -8,6 +9,7 @@ module.exports = {
     filename: 'bundle.js',
     clean: true,
   },
+  devtool: 'source-map',
   module: {
     rules: [
       {
@@ -33,14 +35,32 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './src/index.html',
     }),
+    new webpack.DefinePlugin({
+      'process.env': {
+        NODE_ENV: JSON.stringify(process.env.NODE_ENV || 'development'),
+        FORECAST_LIVE_BACKEND_CANISTER_ID: JSON.stringify(process.env.FORECAST_LIVE_BACKEND_CANISTER_ID || 'local-canister-id'),
+      },
+    }),
   ],
   devServer: {
     static: {
       directory: path.join(__dirname, 'dist'),
     },
     compress: true,
-    port: 8080,
+    port: 3000,
     hot: true,
+    client: {
+      overlay: {
+        errors: true,
+        warnings: true,
+      },
+      progress: true,
+      logging: 'info',
+    },
+    devMiddleware: {
+      stats: 'errors-warnings',
+    },
+    open: true,
   },
   mode: 'development',
 };

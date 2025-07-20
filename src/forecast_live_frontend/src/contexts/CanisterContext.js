@@ -13,8 +13,14 @@ export function useCanister() {
   return context;
 }
 
-// Canister ID from config
-const CANISTER_ID = appConfig.api.canisterId;
+// Get canister ID from config
+const getCanisterId = (isLocal = true) => {
+  if (isLocal) {
+    return appConfig.api.canisters.local.forecast_live_backend;
+  } else {
+    return appConfig.api.canisters.ic.forecast_live_backend;
+  }
+};
 
 // Define the canister interface
 const idlFactory = ({ IDL }) => {
@@ -52,70 +58,79 @@ const idlFactory = ({ IDL }) => {
 };
 
 export function CanisterProvider({ children }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, identity } = useAuth();
   const [actor, setActor] = useState(null);
+  const [backendActor, setBackendActor] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isActorAvailable, setIsActorAvailable] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && (user || identity)) {
       initializeActor();
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, identity]);
 
   const initializeActor = async () => {
     try {
       setLoading(true);
       console.log('Initializing canister actor with auth type:', user?.authType);
       
-      // If we're using real authentication
-      if (!appConfig.auth.useMockAuth) {
-        let identity;
+      // If we have a valid identity from auth context
+      if (identity) {
+        const canisterId = getCanisterId();
+        console.log('Using identity for canister calls:', identity.getPrincipal().toString());
+        console.log('Canister ID:', canisterId);
         
-        // Get identity from appropriate auth provider
-        if (user?.authType === 'nfid') {
-          // For NFID, we need to get identity from the AuthContext user
-          identity = user.principal;
-          console.log('Using NFID identity for canister calls:', user.principalText);
-        } else {
-          console.error('No valid identity found for canister calls');
-          throw new Error('Authentication required for canister interaction');
-        }
-        
-        const agent = new HttpAgent({
-          identity: identity,
-          host: appConfig.api.host,
-        });
-        
-        // In development environment, we might need to fetch the root key
-        if (process.env.NODE_ENV !== 'production') {
-          await agent.fetchRootKey().catch(err => {
-            console.warn('Unable to fetch root key. Check to ensure that your local replica is running');
-            console.error(err);
+        try {
+          const agent = new HttpAgent({
+            identity: identity,
+            host: appConfig.api.host || 'http://localhost:8000',
           });
+          
+          // In development environment, we might need to fetch the root key
+          if (appConfig.api.fetchRootKey) {
+            await agent.fetchRootKey().catch(err => {
+              console.warn('Unable to fetch root key. Check to ensure that your local replica is running');
+              console.error(err);
+            });
+          }
+          
+          // Create the actor with the agent
+          const realActor = Actor.createActor(idlFactory, {
+            agent,
+            canisterId,
+          });
+          
+          setActor(realActor);
+          setBackendActor(realActor); // Set the backend actor specifically
+          setIsActorAvailable(true);
+          console.log('Real canister actor created successfully');
+        } catch (error) {
+          console.error('Error creating agent or actor:', error);
+          // Fall back to mock
+          createAndSetMockActor();
         }
-        
-        // Create the actor with the agent
-        const realActor = Actor.createActor(idlFactory, {
-          agent,
-          canisterId: CANISTER_ID,
-        });
-        
-        setActor(realActor);
-        console.log('Real canister actor created successfully');
       } else {
-        console.log('Using mock actor for development');
-        // For development, we'll use a mock actor
-        const mockActor = createMockActor();
-        setActor(mockActor);
-        
-        // Initialize sample data
-        await mockActor.initializeSampleData();
+        createAndSetMockActor();
       }
     } catch (error) {
       console.error('Failed to initialize canister:', error);
+      createAndSetMockActor();
     } finally {
       setLoading(false);
     }
+  };
+
+  const createAndSetMockActor = async () => {
+    console.log('Using mock actor for development');
+    // For development, we'll use a mock actor
+    const mockActor = createMockActor();
+    setActor(mockActor);
+    setBackendActor(mockActor);
+    setIsActorAvailable(true);
+    
+    // Initialize sample data
+    await mockActor.initializeSampleData();
   };
 
   // Mock actor for development
@@ -339,8 +354,10 @@ export function CanisterProvider({ children }) {
 
   const value = {
     actor,
+    backendActor,
     loading,
-    canisterId: CANISTER_ID,
+    isActorAvailable,
+    canisterId: getCanisterId(),
   };
 
   return (
