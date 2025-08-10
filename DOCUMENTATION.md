@@ -6,41 +6,51 @@ This file serves as the central documentation for the Forecast Live F1 predictio
 1. [Project Overview](#project-overview)
 2. [Technology Stack](#technology-stack)
 3. [Architecture](#architecture)
-4. [F1 Data Integration](#f1-data-integration)
-5. [Scoring System](#scoring-system)
-6. [Authentication](#authentication)
-7. [Development Guide](#development-guide)
-8. [API Endpoints](#api-endpoints)
-9. [Troubleshooting](#troubleshooting)
+4. [Data Model](#data-model)
+5. [F1 Data Integration](#f1-data-integration)
+6. [Scoring System](#scoring-system)
+7. [Authentication](#authentication)
+8. [Development Guide](#development-guide)
+9. [API Endpoints](#api-endpoints)
+10. [Troubleshooting](#troubleshooting)
 
 ## Project Overview
 
-Forecast Live is an Internet Computer Protocol (ICP) dApp for Formula 1 predictions. Users can upload their race predictions, and the system will score these predictions based on real F1 race results, providing live updates and a competitive leaderboard.
+Forecast Live is an Internet Computer Protocol (ICP) dApp for Formula 1 predictions. Users can upload their race predictions, the system will parse the screenshots, and score these predictions based on real F1 race results, providing live updates and a competitive leaderboard.
 
 ## Technology Stack
 
 - **Backend**: Motoko canisters on Internet Computer Protocol
 - **Frontend**: React with TailwindCSS
-- **Authentication**: NFID for user identity
+- **Authentication**: Internet Identity and NFID
 - **Data Visualization**: Chart.js with react-chartjs-2
-- **File Upload**: react-dropzone
-- **F1 Data**: Ergast API (via HTTP outcalls) and local Fast-F1 Python service
+- **File Upload**: react-dropzone for screenshot upload
+- **F1 Data**: Ergast API (via HTTP outcalls) with local data processing
 
 ## Architecture
 
-### Multi-Canister Architecture
-The application uses three main canisters:
+Forecast Live is built on the Internet Computer Protocol (ICP) using a multi-canister architecture.
 
-1. **forecast_live_backend**: Main controller canister that coordinates between services
-2. **f1_data_service**: Handles F1 data fetching and storage
-3. **prediction_service**: Manages user predictions and scoring
+### Canisters
+1. **PredictionService** - Core business logic for predictions, groups, and leaderboards
+2. **F1DataService** - Fetches and processes F1 race data 
+3. **AIPredictionService** - Handles screenshot parsing and validation
 
-### File Structure
-- `/src/forecast_live_backend/` - Motoko backend canister code
-- `/src/forecast_live_frontend/src/` - React frontend code
-- `/f1_data_service/` - Python service for local F1 data during development
+### Frontend
+- React.js application with Tailwind CSS
+- Internet Computer Agent integration
+- Internet Identity authentication
+- Real-time data updates
 
-## F1 Data Integration
+### Data Flow
+1. Users authenticate using Internet Identity or NFID
+2. Predictions are submitted via screenshot uploads
+3. Screenshots are parsed to extract driver order
+4. During races, live data is fetched and processed
+5. Scores are calculated based on current positions
+6. Leaderboards are updated in real-time
+
+## Data Model
 
 ### ICP On-Chain Data
 The Motoko backend fetches and stores real F1 data on-chain using HTTP outcalls:

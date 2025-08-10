@@ -10,9 +10,9 @@ import Principal "mo:base/Principal";
 import Iter "mo:base/Iter";
 import Blob "mo:base/Blob";
 
-actor ForecastLive {
+persistent actor ForecastLive {
     // IC Management Canister interface for HTTP outcalls
-    let IC = actor "aaaaa-aa" : actor {
+    transient let IC = actor "aaaaa-aa" : actor {
         http_request : HttpRequestArgs -> async HttpResponsePayload;
     };
 
@@ -100,16 +100,23 @@ actor ForecastLive {
         context : Blob;
     };
 
+    // Stable storage for persisting data across upgrades
+    private var predictionEntries: [(Principal, Prediction)] = [];
+    private var raceDataEntries: [RaceData] = [];
+    private var stableCurrentLap: Nat = 0;
+    private var stableF1RaceSchedule: [F1RaceSchedule] = [];
+    private var stableF1LiveData: ?F1LiveData = null;
+
     // State
-    private var predictions = Map.HashMap<Principal, Prediction>(0, Principal.equal, Principal.hash);
-    private var raceData: [RaceData] = [];
-    private var currentLap: Nat = 0;
-    private var f1RaceSchedule: [F1RaceSchedule] = [];
-    private var f1LiveData: ?F1LiveData = null;
+    private transient var predictions = Map.HashMap<Principal, Prediction>(0, Principal.equal, Principal.hash);
+    private transient var raceData: [RaceData] = [];
+    private transient var currentLap: Nat = 0;
+    private transient var f1RaceSchedule: [F1RaceSchedule] = [];
+    private transient var f1LiveData: ?F1LiveData = null;
 
     // Ergast API endpoints
-    private let ERGAST_BASE_URL = "http://ergast.com/api/f1";
-    private let CURRENT_SEASON = "2024";
+    private transient let ERGAST_BASE_URL = "http://ergast.com/api/f1";
+    private transient let CURRENT_SEASON = "2024";
 
     // Store user prediction
     public func storePrediction(userId: Principal, prediction: [Text]) : async Result.Result<(), Text> {
@@ -427,5 +434,32 @@ actor ForecastLive {
         currentLap := 0;
         raceData := [];
         f1LiveData := null;
+    };
+    
+    // System functions for canister upgrades
+    system func preupgrade() {
+        // Save state to stable variables before upgrade
+        predictionEntries := Iter.toArray(predictions.entries());
+        raceDataEntries := raceData;
+        stableCurrentLap := currentLap;
+        stableF1RaceSchedule := f1RaceSchedule;
+        stableF1LiveData := f1LiveData;
+    };
+    
+    system func postupgrade() {
+        // Restore state from stable variables after upgrade
+        predictions := Map.HashMap<Principal, Prediction>(predictionEntries.size(), Principal.equal, Principal.hash);
+        for ((k, v) in predictionEntries.vals()) {
+            predictions.put(k, v);
+        };
+        
+        raceData := raceDataEntries;
+        currentLap := stableCurrentLap;
+        f1RaceSchedule := stableF1RaceSchedule;
+        f1LiveData := stableF1LiveData;
+        
+        // Optional: clear stable storage to save memory
+        predictionEntries := [];
+        raceDataEntries := [];
     };
 }

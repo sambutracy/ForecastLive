@@ -7,7 +7,7 @@ import Time "mo:base/Time";
 import Blob "mo:base/Blob";
 import JsonParser "JsonParser";
 
-actor F1DataService {
+persistent actor F1DataService {
     // Types
     public type F1RaceSchedule = {
         round: Nat;
@@ -75,17 +75,17 @@ actor F1DataService {
     };
 
     // IC Management Canister interface for HTTP outcalls
-    private let IC = actor "aaaaa-aa" : actor {
+    private transient let IC = actor "aaaaa-aa" : actor {
         http_request : HttpRequestArgs -> async HttpResponsePayload;
     };
 
     // State
-    private var raceSchedule: [F1RaceSchedule] = [];
-    private var liveRaceData: ?F1LiveData = null;
+    private transient var raceSchedule: [F1RaceSchedule] = [];
+    private transient var liveRaceData: ?F1LiveData = null;
 
     // Ergast API endpoints
-    private let ERGAST_BASE_URL = "https://ergast.com/api/f1";
-    private let CURRENT_SEASON = "2025";
+    private transient let ERGAST_BASE_URL = "https://ergast.com/api/f1";
+    private transient let CURRENT_SEASON = "2025";
 
     // Transform function for HTTP outcalls
     public query func transform(raw : TransformArgs) : async HttpResponsePayload {

@@ -6,7 +6,12 @@
   "scripts": {
     "start": "webpack serve --mode development",
     "build": "webpack --mode production",
+    "build:local": "node -e \"process.env.NODE_ENV='development'; require('./node_modules/.bin/webpack')\" --mode development",
+    "build:ic": "node -e \"process.env.NODE_ENV='production'; require('./node_modules/.bin/webpack')\" --mode production",
     "dev": "webpack serve --mode development --open",
+    "dev:local": "node -e \"process.env.DFX_NETWORK='local'\" && npm run prepare-env && npm run dev",
+    "dev:ic": "node -e \"process.env.DFX_NETWORK='ic'\" && npm run prepare-env && npm run dev",
+    "prepare-env": "node scripts/prepare-env.js",
     "test": "jest"
   },
   "dependencies": {
@@ -15,6 +20,7 @@
     "@dfinity/candid": "0.18.1",
     "@dfinity/identity": "0.18.1",
     "@dfinity/principal": "0.18.1",
+    "@nfid/embed": "^0.10.3",
     "axios": "1.10.0",
     "chart.js": "4.4.0",
     "react": "18.2.0",

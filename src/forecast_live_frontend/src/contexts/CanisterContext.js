@@ -2,6 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { useAuth } from './AuthContext';
 import appConfig from '../config/appConfig';
+import ENV from '../config/env';
+
+// Define the host for IC API calls
+const IC_HOST = appConfig.api.host || ENV.IC_HOST;
 
 const CanisterContext = createContext();
 
@@ -14,12 +18,18 @@ export function useCanister() {
 }
 
 // Get canister ID from config
-const getCanisterId = (isLocal = true) => {
-  if (isLocal) {
-    return appConfig.api.canisters.local.forecast_live_backend;
-  } else {
-    return appConfig.api.canisters.ic.forecast_live_backend;
+const getCanisterId = () => {
+  // Get the canister ID from appConfig
+  const canisterId = appConfig.api.canisters.forecast_live_backend;
+  
+  if (!canisterId) {
+    console.error('No canister ID configured for forecast_live_backend');
+    return ENV.IS_PRODUCTION 
+      ? null  // In production, we should never use a fallback
+      : ENV.FORECAST_LIVE_BACKEND_CANISTER_ID; // Use our environment variable
   }
+  
+  return canisterId;
 };
 
 // Define the canister interface
@@ -78,6 +88,13 @@ export function CanisterProvider({ children }) {
       // If we have a valid identity from auth context
       if (identity) {
         const canisterId = getCanisterId();
+        
+        // Make sure we have a valid canister ID
+        if (!canisterId) {
+          console.error('No valid canister ID found. Please ensure canister IDs are properly configured.');
+          throw new Error('Missing canister ID configuration');
+        }
+        
         console.log('Using identity for canister calls:', identity.getPrincipal().toString());
         console.log('Canister ID:', canisterId);
         

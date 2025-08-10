@@ -2,17 +2,15 @@
  * Application Configuration
  * This file contains all the configuration settings for the Forecast Live F1 Prediction dApp
  */
+import ENV from './env';
 
 const appConfig = {
   // Authentication settings
   auth: {
-    useMockAuth: false, // Set to false to use real authentication
     nfid: {
       applicationName: 'Forecast Live',
-      applicationLogo: 'https://nfid.one/icons/favicon-96x96.png', 
-      // Development local URI 
-      redirectUri: 'http://localhost:8080/', // Match webpack-dev-server port
-      // NFID configuration
+      applicationLogo: 'https://via.placeholder.com/150x150.png?text=FL', // Use a placeholder logo for now
+      redirectUri: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000',
       host: 'https://nfid.one',
       derivationOrigin: 'https://identity.ic0.app',
     },
@@ -21,13 +19,11 @@ const appConfig = {
   // API endpoints
   api: {
     // Internet Computer host
-    host: 'https://ic0.app', // IC mainnet
-    // Alternative options:
-    // 'https://icp0.io' - Alternative IC mainnet
-    // 'http://localhost:8000' - Local replica
+    // For development, we use the local replica, for production we use IC mainnet
+    host: 'http://localhost:8000', // Default to local replica
     
-    // Flag to fetch root key (needed for local development)
-    fetchRootKey: true, // Set to false for production
+    // Flag to fetch root key (only needed for local development)
+    fetchRootKey: true, // Always fetch root key in development
     
     // F1 Data Service API endpoint
     f1DataService: 'http://localhost:5000/api',
@@ -35,16 +31,11 @@ const appConfig = {
     // Socket.io endpoint for live race data
     socket: 'http://localhost:5000',
     
-    // Canister IDs for ICP deployment
+    // Canister IDs - hardcoded for development
+    // In a production environment, these would be replaced by the build script
     canisters: {
-      // Local development canister IDs
-      local: {
-        forecast_live_backend: 'rrkah-fqaaa-aaaaa-aaaaq-cai', // Local canister ID
-      },
-      // Production canister IDs
-      ic: {
-        forecast_live_backend: 'utozz-siaaa-aaaam-qaaxq-cai', // Replace with actual production canister ID when deployed
-      }
+      // Development canister ID - this would be replaced at build time in production
+      forecast_live_backend: 'rrkah-fqaaa-aaaaa-aaaaq-cai', // Local development ID
     },
   },
   

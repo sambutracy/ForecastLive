@@ -61,30 +61,12 @@ export function AuthProvider({ children }) {
       // Dynamic import to handle potential module loading issues
       const { NFID } = await import('@nfid/embed');
       
-      console.log('Checking NFID session, available methods:', Object.keys(NFID || {}));
-      
-      // First, initialize the NFID iframe
-      const nfidConfig = {
-        application: {
-          name: appConfig.auth.nfid.applicationName,
-          logo: appConfig.auth.nfid.applicationLogo,
-        },
-        derivationOrigin: appConfig.auth.nfid.derivationOrigin,
-        host: appConfig.auth.nfid.host,
-        redirectUri: appConfig.auth.nfid.redirectUri,
-      };
-      
-      await NFID.initIframe(nfidConfig);
-      
-      // Create NFID instance with configuration
-      const nfidInstance = new NFID(nfidConfig);
-      
       // Check if user is already authenticated
-      const isAuthenticated = await nfidInstance.isAuthenticated();
+      const isAuthenticated = await NFID.isAuthenticated();
       
       if (isAuthenticated) {
         console.log('User is already authenticated with NFID');
-        const identity = await nfidInstance.getIdentity();
+        const identity = await NFID.getIdentity();
         const principal = identity.getPrincipal();
         const principalText = principal.toString();
         
@@ -150,38 +132,23 @@ export function AuthProvider({ children }) {
       // Dynamic import to handle potential module loading issues
       const { NFID } = await import('@nfid/embed');
       
-      console.log('NFID module loaded:', NFID);
-      console.log('Available NFID methods:', Object.keys(NFID || {}));
-      
-      // Try a minimal configuration first
-      const nfidConfig = {
+      // Initialize NFID with configuration
+      await NFID.init({
         application: {
           name: appConfig.auth.nfid.applicationName,
+          logo: appConfig.auth.nfid.applicationLogo,
         },
-      };
+        idleOptions: {
+          disableIdle: true,
+        },
+      });
       
-      console.log('Initializing NFID iframe with minimal config:', nfidConfig);
+      console.log('NFID initialized, starting login...');
       
-      try {
-        await NFID.initIframe(nfidConfig);
-        console.log('NFID iframe initialized successfully');
-      } catch (initError) {
-        console.error('NFID iframe initialization failed:', initError);
-        throw new Error(`NFID iframe initialization failed: ${initError.message}`);
-      }
-      
-      // Create NFID instance with minimal configuration
-      const nfidInstance = new NFID(nfidConfig);
-      
-      console.log('NFID instance created:', nfidInstance);
-      console.log('NFID instance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(nfidInstance)));
-      
-      // Start the NFID login flow using getDelegation
-      const delegation = await nfidInstance.getDelegation();
-      console.log('NFID delegation received:', delegation);
-      
-      // Get the identity from the delegation
-      const identity = await nfidInstance.getIdentity();
+      // Start the NFID login flow
+      const identity = await NFID.authenticate({
+        derivationOrigin: appConfig.auth.nfid.derivationOrigin,
+      });
       
       if (!identity) {
         throw new Error('NFID authentication failed - no identity returned');
@@ -284,20 +251,7 @@ export function AuthProvider({ children }) {
       } else if (authType === 'nfid') {
         console.log('Performing NFID logout...');
         const { NFID } = await import('@nfid/embed');
-        
-        const nfidConfig = {
-          application: {
-            name: appConfig.auth.nfid.applicationName,
-            logo: appConfig.auth.nfid.applicationLogo,
-          },
-          derivationOrigin: appConfig.auth.nfid.derivationOrigin,
-          host: appConfig.auth.nfid.host,
-          redirectUri: appConfig.auth.nfid.redirectUri,
-        };
-        
-        await NFID.initIframe(nfidConfig);
-        const nfidInstance = new NFID(nfidConfig);
-        await nfidInstance.logout();
+        await NFID.logout();
         console.log('NFID logout successful');
       }
       

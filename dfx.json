@@ -5,9 +5,27 @@
       "main": "src/forecast_live_backend/main.mo",
       "type": "motoko"
     },
+    "prediction_service": {
+      "main": "src/forecast_live_backend/PredictionService.mo",
+      "type": "motoko",
+      "dependencies": [
+        "f1_data_service",
+        "ai_prediction_service"
+      ]
+    },
+    "f1_data_service": {
+      "main": "src/forecast_live_backend/F1DataService.mo",
+      "type": "motoko"
+    },
+    "ai_prediction_service": {
+      "main": "src/forecast_live_backend/AIPredictionService.mo",
+      "type": "motoko"
+    },
     "forecast_live_frontend": {
       "dependencies": [
-        "forecast_live_backend"
+        "forecast_live_backend",
+        "prediction_service",
+        "f1_data_service"
       ],
       "frontend": {
         "entrypoint": "src/forecast_live_frontend/src/index.html"

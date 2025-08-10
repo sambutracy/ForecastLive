@@ -1,40 +1,24 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import appConfig from '../config/appConfig';
 
 function AuthForm() {
-  const { login, loginWithNFID, loading, nfidError } = useAuth();
-  const [authError, setAuthError] = useState(null);
+  const { loginWithNFID, loginWithII, loading, authError } = useAuth();
+  const [localError, setLocalError] = useState(null);
 
   // Handle login with error catching
-  const handleLogin = async (method, type = null) => {
+  const handleLogin = async (method) => {
     try {
-      setAuthError(null);
-      console.log(`Attempting to login with method: ${method.name || 'unknown'}, type: ${type || 'default'}`);
+      setLocalError(null);
+      console.log(`Attempting to login with method: ${method.name || 'unknown'}`);
       
-      // For development - use mock authentication if F1 service is not running
-      if (!appConfig.api.f1DataService && !appConfig.auth.useMockAuth) {
-        console.log('F1 data service is not running. Using mock authentication for development.');
-        // Update config to use mock authentication
-        appConfig.auth.useMockAuth = true;
-      }
-      
-      if (type) {
-        await method(type);
-      } else {
-        await method();
+      const success = await method();
+      if (!success) {
+        setLocalError('Authentication failed. Please try again.');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setAuthError(error.message || 'Authentication failed. Please try again.');
+      setLocalError(error.message || 'Authentication failed. Please try again.');
     }
-  };
-
-  // Determine the login text based on config
-  const getLoginButtonText = () => {
-    if (loading) return 'Connecting...';
-    if (appConfig.auth.useMockAuth) return 'Login (Development Mode)';
-    return 'Login with NFID';
   };
 
   return (
@@ -60,55 +44,45 @@ function AuthForm() {
             </ul>
           </div>
           
-          {(authError || nfidError) && (
+          {(localError || authError) && (
             <div className="bg-red-900/30 border border-red-800 text-red-400 px-4 py-3 rounded-md mb-4">
-              <p className="font-medium mb-2">{authError || nfidError}</p>
-              {!appConfig.api.f1DataService && (
-                <p className="text-xs text-red-300">
-                  Note: F1 data service is not running. Login will use mock authentication in development mode.
-                </p>
-              )}
+              <p className="font-medium mb-2">{localError || authError}</p>
             </div>
           )}
 
-          {appConfig.auth.useMockAuth ? (
-            // Mock authentication for development
+          <div className="space-y-4">
+            {/* NFID Option - Make this primary */}
             <button
-              onClick={() => handleLogin(login)}
+              onClick={() => handleLogin(loginWithNFID)}
               disabled={loading}
-              className="w-full btn-primary py-3 text-lg font-semibold disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white py-3 text-lg font-semibold rounded-md hover:opacity-90 disabled:opacity-50"
             >
-              {loading ? 'Connecting...' : 'Login (Development Mode)'}
+              <div className="flex items-center justify-center">
+                <img 
+                  src="https://nfid.one/icons/nfid-logo.svg" 
+                  alt="NFID" 
+                  className="w-5 h-5 mr-2" 
+                />
+                <span>{loading ? 'Connecting...' : 'Login with NFID'}</span>
+              </div>
             </button>
-          ) : (
-            // NFID authentication option
-            <div className="space-y-4">
-              <button
-                onClick={() => handleLogin(login)}
-                disabled={loading}
-                className="w-full btn-primary py-3 text-lg font-semibold disabled:opacity-50"
-              >
-                <div className="flex items-center justify-center">
-                  <img 
-                    src="https://nfid.one/icons/nfid-logo.svg" 
-                    alt="NFID" 
-                    className="w-5 h-5 mr-2" 
-                  />
-                  <span>{getLoginButtonText()}</span>
-                </div>
-              </button>
-              
-              <p className="text-xs text-gray-400 mt-2">
-                Powered by NFID - Non-Fungible Identity
-              </p>
-            </div>
-          )}
-          
-          {appConfig.auth.useMockAuth && (
-            <p className="text-xs text-gray-500 mt-4">
-              Development mode - Authentication is mocked for testing
-            </p>
-          )}
+            
+            {/* Internet Identity */}
+            <button
+              onClick={() => handleLogin(loginWithII)}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 text-lg font-semibold rounded-md hover:opacity-90 disabled:opacity-50"
+            >
+              <div className="flex items-center justify-center">
+                <svg viewBox="0 0 41 41" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mr-2">
+                  <path d="M20.5 41C31.8218 41 41 31.8218 41 20.5C41 9.17816 31.8218 0 20.5 0C9.17816 0 0 9.17816 0 20.5C0 31.8218 9.17816 41 20.5 41Z" fill="white"/>
+                  <path d="M35 20.5C35 28.5081 28.5081 35 20.5 35C12.4919 35 6 28.5081 6 20.5C6 12.4919 12.4919 6 20.5 6C28.5081 6 35 12.4919 35 20.5Z" fill="#3B00B9"/>
+                  <path d="M29 20.5C29 25.1944 25.1944 29 20.5 29C15.8056 29 12 25.1944 12 20.5C12 15.8056 15.8056 12 20.5 12C25.1944 12 29 15.8056 29 20.5Z" fill="white"/>
+                </svg>
+                <span>{loading ? 'Connecting...' : 'Login with Internet Identity'}</span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </div>

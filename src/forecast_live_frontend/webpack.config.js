@@ -36,10 +36,18 @@ module.exports = {
       template: './src/index.html',
     }),
     new webpack.DefinePlugin({
-      'process.env': {
-        NODE_ENV: JSON.stringify(process.env.NODE_ENV || 'development'),
-        FORECAST_LIVE_BACKEND_CANISTER_ID: JSON.stringify(process.env.FORECAST_LIVE_BACKEND_CANISTER_ID || 'local-canister-id'),
-      },
+      // Replace process.env references with actual values at build time
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+      'process.env.FORECAST_LIVE_BACKEND_CANISTER_ID': JSON.stringify(
+        process.env.FORECAST_LIVE_BACKEND_CANISTER_ID || 'rrkah-fqaaa-aaaaa-aaaaq-cai'
+      ),
+      'process.env.DFX_NETWORK': JSON.stringify(
+        process.env.DFX_NETWORK || 'local'
+      ),
+      // Explicitly define process.env to avoid "process is not defined" errors
+      'process.env': JSON.stringify({
+        NODE_ENV: process.env.NODE_ENV || 'development'
+      }),
     }),
   ],
   devServer: {
