@@ -36,7 +36,8 @@ const RaceStatus: React.FC<RaceStatusProps> = ({ raceName, currentLap, totalLaps
       
       <div className="w-full bg-gray-700 rounded-full h-2.5 mb-4">
         <div 
-          className={`bg-blue-500 h-2.5 rounded-full transition-all duration-500 w-[${lapProgressPercentage}%]`}
+          className="bg-blue-500 h-2.5 rounded-full transition-all duration-500"
+          style={{ width: `${lapProgressPercentage}%` }}
         ></div>
       </div>
       

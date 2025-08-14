@@ -46,14 +46,51 @@ interface UserStats {
 
 // Mock data for new components
 const MOCK_LEADERBOARD_DATA: LeaderboardUser[] = [
-  { userId: 'user1', username: 'MaxVerstappen1', points: 230, movement: 0 },
-  { userId: 'user2', username: 'LewisHamilton44', points: 210, movement: 2 },
-  { userId: 'user3', username: 'CharlesLeclerc16', points: 190, movement: -1 },
-  { userId: 'user4', username: 'LandoNorris4', points: 175, movement: 1 },
-  { userId: 'user5', username: 'CarlosSainz55', points: 160, movement: -2 },
-  { userId: 'user6', username: 'SergioPerez11', points: 145, movement: 0 },
-  { userId: 'user7', username: 'GeorgeRussell63', points: 130, movement: 3 },
+  { userId: 'user1', username: 'Tracy', points: 230, movement: 0 },
+  { userId: 'user2', username: 'Victor', points: 210, movement: 0 },
+  { userId: 'user3', username: 'Joy', points: 190, movement: 0 },
+  { userId: 'user4', username: 'Ian', points: 175, movement: 0 },
+  { userId: 'user5', username: 'Peter', points: 160, movement: 0 },
 ];
+
+// Mock predictions for each user
+const MOCK_USER_PREDICTIONS: Record<string, Array<{ driverId: string; predictedPosition: number }>> = {
+  'user1': [
+    { driverId: 'VER', predictedPosition: 1 },
+    { driverId: 'HAM', predictedPosition: 3 },
+    { driverId: 'LEC', predictedPosition: 2 },
+    { driverId: 'NOR', predictedPosition: 4 },
+    { driverId: 'SAI', predictedPosition: 5 },
+  ],
+  'user2': [
+    { driverId: 'VER', predictedPosition: 2 },
+    { driverId: 'HAM', predictedPosition: 1 },
+    { driverId: 'LEC', predictedPosition: 3 },
+    { driverId: 'NOR', predictedPosition: 5 },
+    { driverId: 'SAI', predictedPosition: 4 },
+  ],
+  'user3': [
+    { driverId: 'VER', predictedPosition: 1 },
+    { driverId: 'HAM', predictedPosition: 2 },
+    { driverId: 'LEC', predictedPosition: 4 },
+    { driverId: 'NOR', predictedPosition: 3 },
+    { driverId: 'SAI', predictedPosition: 5 },
+  ],
+  'user4': [
+    { driverId: 'VER', predictedPosition: 3 },
+    { driverId: 'HAM', predictedPosition: 1 },
+    { driverId: 'LEC', predictedPosition: 2 },
+    { driverId: 'NOR', predictedPosition: 5 },
+    { driverId: 'SAI', predictedPosition: 4 },
+  ],
+  'user5': [
+    { driverId: 'VER', predictedPosition: 2 },
+    { driverId: 'HAM', predictedPosition: 3 },
+    { driverId: 'LEC', predictedPosition: 1 },
+    { driverId: 'NOR', predictedPosition: 4 },
+    { driverId: 'SAI', predictedPosition: 5 },
+  ],
+};
 
 const MOCK_PREDICTION_DATA: PredictionDriver[] = [
   { driverName: 'Max Verstappen', predictedPosition: 1, actualPosition: 1 },
@@ -105,6 +142,63 @@ const Dashboard: React.FC = () => {
   // State for file upload visibility
   const [uploadOpen, setUploadOpen] = useState(true);
   
+  // Track the current lap for simulation
+  const [simulatedLap, setSimulatedLap] = useState(raceStatus.currentLap);
+  
+  // Generate some mock actual positions for simulation
+  const [actualPositions, setActualPositions] = useState([
+    { driverId: 'VER', position: 1 },
+    { driverId: 'HAM', position: 2 },
+    { driverId: 'LEC', position: 3 },
+    { driverId: 'NOR', position: 4 },
+    { driverId: 'SAI', position: 5 },
+  ]);
+  
+  // Enhanced leaderboard users with predictions
+  const [enhancedLeaderboardData, setEnhancedLeaderboardData] = useState(() => {
+    return MOCK_LEADERBOARD_DATA.map(user => ({
+      ...user,
+      predictions: MOCK_USER_PREDICTIONS[user.userId]
+    }));
+  });
+  
+  // Simulate lap advancement for demo purposes
+  useEffect(() => {
+    const lapTimer = setInterval(() => {
+      setSimulatedLap(prevLap => {
+        const newLap = prevLap + 1;
+        if (newLap > raceStatus.totalLaps) {
+          // Stop at the end of the race
+          clearInterval(lapTimer);
+          return raceStatus.totalLaps;
+        }
+        
+        // Randomly shuffle actual positions every few laps
+        if (newLap % 3 === 0) {
+          const shuffledPositions = [...actualPositions]
+            .sort(() => Math.random() - 0.5)
+            .map((driver, index) => ({
+              ...driver,
+              position: index + 1
+            }));
+          setActualPositions(shuffledPositions);
+        }
+        
+        return newLap;
+      });
+    }, 5000); // Advance lap every 5 seconds
+    
+    return () => clearInterval(lapTimer);
+  }, []);
+  
+  // Update race status when simulated lap changes
+  useEffect(() => {
+    setRaceStatus(prev => ({
+      ...prev,
+      currentLap: simulatedLap
+    }));
+  }, [simulatedLap]);
+  
   useEffect(() => {
     if (isAuthenticated && isActorAvailable && actor) {
       fetchUserStats();
@@ -129,23 +223,42 @@ const Dashboard: React.FC = () => {
   };
   
   const prepareChartData = (): void => {
-    // Updated to show lap-by-lap progression
+    // Updated to show friends group changes over laps
     const labels = Array.from({ length: 10 }, (_, i) => `Lap ${i * 5 + 5}`); // Laps 5, 10, 15...
     
+    // Generate datasets for each friend in the group
     setChartData({
       labels,
       datasets: [
         {
-          label: 'Your Points',
-          data: labels.map((_, i) => 10 + i * 5 + Math.floor(Math.random() * 5)), // Increasing points trend with some randomness
+          label: 'Tracy',
+          data: labels.map((_, i) => 20 + i * 6 + Math.floor(Math.random() * 8)), 
           borderColor: 'rgba(255, 99, 132, 1)',
           backgroundColor: 'rgba(255, 99, 132, 0.2)',
         },
         {
-          label: 'Avg Points',
-          data: labels.map((_, i) => 8 + i * 4 + Math.floor(Math.random() * 5)),
+          label: 'Victor',
+          data: labels.map((_, i) => 18 + i * 5.5 + Math.floor(Math.random() * 10)),
           borderColor: 'rgba(54, 162, 235, 1)',
           backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        },
+        {
+          label: 'Joy',
+          data: labels.map((_, i) => 15 + i * 5 + Math.floor(Math.random() * 7)),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        },
+        {
+          label: 'Ian',
+          data: labels.map((_, i) => 12 + i * 4.5 + Math.floor(Math.random() * 8)),
+          borderColor: 'rgba(153, 102, 255, 1)',
+          backgroundColor: 'rgba(153, 102, 255, 0.2)',
+        },
+        {
+          label: 'Peter',
+          data: labels.map((_, i) => 10 + i * 4 + Math.floor(Math.random() * 9)),
+          borderColor: 'rgba(255, 159, 64, 1)',
+          backgroundColor: 'rgba(255, 159, 64, 0.2)',
         }
       ]
     });
@@ -165,16 +278,8 @@ const Dashboard: React.FC = () => {
       
       {/* Grid layout for desktop (3 columns) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left column - Race Status, Leaderboard, Prediction Upload */}
+        {/* Left column - Race Status, Prediction Comparison, Prediction Upload */}
         <div className="space-y-6">
-          {/* Race Status */}
-          <RaceStatus 
-            raceName={raceStatus.raceName}
-            currentLap={raceStatus.currentLap}
-            totalLaps={raceStatus.totalLaps}
-            status={raceStatus.status}
-          />
-          
           {/* User Stats */}
           <div className="bg-gray-800 rounded-xl shadow-md p-4">
             <h2 className="text-xl font-bold text-white mb-4">Your Stats</h2>
@@ -198,8 +303,8 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           
-          {/* Leaderboard */}
-          <Leaderboard users={MOCK_LEADERBOARD_DATA} />
+          {/* Prediction Comparison - Now in left column */}
+          <PredictionComparison predictions={MOCK_PREDICTION_DATA} />
           
           {/* Prediction Upload */}
           <SimplePredictionUpload 
@@ -212,9 +317,9 @@ const Dashboard: React.FC = () => {
         
         {/* Middle and Right columns (col-span-2) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Lap Progress Chart */}
+          {/* Friend Group Points Chart */}
           <div className="bg-gray-800 rounded-xl shadow-md p-4">
-            <h2 className="text-xl font-bold text-white mb-4">Points Over Laps</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Friends Group Points Over Laps</h2>
             <div className="h-64">
               <Line 
                 data={chartData}
@@ -255,8 +360,17 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           
-          {/* Prediction Comparison */}
-          <PredictionComparison predictions={MOCK_PREDICTION_DATA} />
+          {/* Enhanced Real-time Leaderboard - Now below the chart */}
+          <Leaderboard 
+            users={enhancedLeaderboardData} 
+            raceName={raceStatus.raceName}
+            currentLap={raceStatus.currentLap}
+            totalLaps={raceStatus.totalLaps}
+            status={raceStatus.status}
+            groupName="Friends Group"
+            actualPositions={actualPositions}
+            autoSimulate={false}
+          />
           
           {/* Upcoming Races */}
           <div className="bg-gray-800 rounded-xl shadow-md p-4">
