@@ -13,8 +13,7 @@ import F1Types "F1Types";
 import Random "mo:base/Random";
 import Option "mo:base/Option";
 import Nat32 "mo:base/Nat32";
-import Hash "mo:base/Hash";
-import Nat64 "mo:base/Nat64";
+import Char "mo:base/Char";
 
 persistent actor PredictionService {
     // Type aliases
@@ -105,8 +104,22 @@ persistent actor PredictionService {
         
         // Generate a unique, memorable invite code (in production use a better algorithm)
         let id = await generateId();
-        let namePrefix = if (Text.size(name) >= 3) { Text.subText(name, 0, 3) } else { name };
-        let idPrefix = if (Text.size(id) >= 4) { Text.subText(id, 0, 4) } else { id };
+        
+        // Helper function to take first N characters
+        func takeChars(text: Text, n: Nat) : Text {
+            let chars = Text.toIter(text);
+            var result = "";
+            var count = 0;
+            label l for (char in chars) {
+                if (count >= n) break l;
+                result := result # Char.toText(char);
+                count += 1;
+            };
+            result
+        };
+        
+        let namePrefix = if (Text.size(name) >= 3) { takeChars(name, 3) } else { name };
+        let idPrefix = if (Text.size(id) >= 4) { takeChars(id, 4) } else { id };
         let inviteCode = Text.concat(namePrefix, idPrefix);
         
         let newGroup : Group = {
@@ -242,7 +255,7 @@ persistent actor PredictionService {
     };
     
     // This would typically be called by an authorized parser service
-    public shared(msg) func updatePredictionParsedOrder(
+    public shared(_) func updatePredictionParsedOrder(
         predictionId : Text, 
         parsedOrder : [Text], 
         confidence : Float
@@ -332,7 +345,7 @@ persistent actor PredictionService {
     
     // ==== Race Management ====
     
-    public shared(msg) func createRace(
+    public shared(_) func createRace(
         raceId : Text,
         round : Nat,
         circuit : Text,
@@ -360,7 +373,7 @@ persistent actor PredictionService {
         return #ok(raceId);
     };
     
-    public shared(msg) func updateRaceStatus(raceId : Text, newStatus : RaceStatus) : async Result.Result<(), Text> {
+    public shared(_) func updateRaceStatus(raceId : Text, newStatus : RaceStatus) : async Result.Result<(), Text> {
         // In production, verify caller is authorized admin
         
         switch (races.get(raceId)) {
@@ -385,7 +398,7 @@ persistent actor PredictionService {
         };
     };
     
-    public shared(msg) func ingestLapData(raceId : Text, lapData : LapData) : async Result.Result<(), Text> {
+    public shared(_) func ingestLapData(raceId : Text, lapData : LapData) : async Result.Result<(), Text> {
         // In production, verify caller is authorized data provider
         
         switch (races.get(raceId)) {
@@ -476,7 +489,6 @@ persistent actor PredictionService {
                         
                         // Check race status and lockout rules
                         var joinLap : Nat = 0;
-                        var locked : Bool = false;
                         
                         switch (race.status) {
                             case (#scheduled) {

@@ -3,16 +3,22 @@ import json
 import threading
 import schedule
 import time
+import io
+import base64
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 import logging
 
 import fastf1
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import requests
+from werkzeug.utils import secure_filename
+
+# Import our OCR processor
+from ocr_processor import OCRPredictionProcessor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +27,19 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'f1-live-data-secret'
-CORS(app, origins=["http://localhost:8080", "http://localhost:3000"])
-socketio = SocketIO(app, cors_allowed_origins=["http://localhost:8080", "http://localhost:3000"])
+app.config['UPLOAD_FOLDER'] = './uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+CORS(app, origins=["http://localhost:8080", "http://localhost:3000", "http://localhost:8000"])
+socketio = SocketIO(app, cors_allowed_origins=["http://localhost:8080", "http://localhost:3000", "http://localhost:8000"])
+
+# Create upload folder if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Configure FastF1 cache
 fastf1.Cache.enable_cache('./fastf1_cache')
+
+# Initialize OCR processor
+ocr_processor = OCRPredictionProcessor()
 
 class F1LiveDataService:
     def __init__(self):
@@ -252,6 +266,71 @@ def get_session_results(year: int, gp_name: str, session_type: str):
             'success': False,
             'error': str(e)
         }), 500
+
+# OCR Processing Endpoints
+@app.route('/ocr/predict', methods=['POST'])
+def process_prediction_image():
+    """Process an F1 prediction image using OCR"""
+    if 'image' not in request.files:
+        return jsonify({
+            'status': 'error',
+            'error': 'No image file provided'
+        }), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({
+            'status': 'error',
+            'error': 'No selected file'
+        }), 400
+    
+    # Get additional metadata
+    user_id = request.form.get('userId', 'anonymous')
+    
+    try:
+        # Read the file
+        file_content = file.read()
+        
+        # Generate a unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{user_id}_{timestamp}_{secure_filename(file.filename)}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Save the file for record-keeping
+        with open(filepath, 'wb') as f:
+            f.write(file_content)
+        
+        # Process the image
+        result = ocr_processor.process_image_bytes(file_content)
+        
+        # Add metadata to result
+        result['userId'] = user_id
+        result['timestamp'] = datetime.now().isoformat()
+        result['filename'] = filename
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        logger.error(f"Error processing image: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+@app.route('/ocr/images/<filename>', methods=['GET'])
+def get_processed_image(filename):
+    """Get a processed OCR image"""
+    try:
+        return send_file(
+            os.path.join(app.config['UPLOAD_FOLDER'], filename),
+            mimetype='image/jpeg'
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving image: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 404
 
 # WebSocket events for real-time updates
 @socketio.on('connect')

@@ -26,4 +26,32 @@ body {
   .input-field {
     @apply w-full p-3 bg-secondary border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-orange-500;
   }
+  
+  /* Error Boundary Styles */
+  .error-boundary-container {
+    padding: 20px;
+    color: white;
+    background: #1A1A2E;
+    max-width: 800px;
+    margin: 40px auto;
+    border-radius: 8px;
+    border: 1px solid #FF8C00;
+  }
+  
+  .error-boundary-heading {
+    color: #FF8C00;
+  }
+  
+  .error-boundary-stack {
+    background: #0F0F23;
+    padding: 15px;
+    border-radius: 4px;
+    overflow: auto;
+    max-height: 300px;
+    margin-top: 15px;
+  }
+  
+  .error-boundary-pre {
+    white-space: pre-wrap;
+  }
 }

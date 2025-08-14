@@ -11,6 +11,37 @@ import Iter "mo:base/Iter";
 import Blob "mo:base/Blob";
 
 persistent actor ForecastLive {
+    // ICRC-10 standard for authentication services
+    public query func icrc10_supported_standards() : async [{ name : Text; url : Text }] {
+        return [
+            { name = "ICRC-10"; url = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10/ICRC-10.md" },
+            { name = "ICRC-28"; url = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-28/ICRC-28.md" }
+        ];
+    };
+
+    // ICRC-28 standard for cross-origin authentication
+    public query func icrc28_trusted_origins() : async { trusted_origins : [Text] } {
+        let trusted_origins = [
+            // Local development
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:8080",
+            // Internet Computer URLs
+            "https://" # Principal.toText(Principal.fromActor(ForecastLive)) # ".icp0.io",
+            "https://" # Principal.toText(Principal.fromActor(ForecastLive)) # ".raw.icp0.io",
+            "https://" # Principal.toText(Principal.fromActor(ForecastLive)) # ".ic0.app",
+            "https://" # Principal.toText(Principal.fromActor(ForecastLive)) # ".raw.ic0.app",
+            // Custom domain if you have one
+            "https://forecastlive.xyz"
+        ];
+
+        return { trusted_origins = trusted_origins };
+    };
+    
+    // Simple "Who Am I?" function to return the caller's principal
+    public query (message) func whoami() : async Principal {
+        message.caller
+    };
     // IC Management Canister interface for HTTP outcalls
     transient let IC = actor "aaaaa-aa" : actor {
         http_request : HttpRequestArgs -> async HttpResponsePayload;
@@ -117,6 +148,21 @@ persistent actor ForecastLive {
     // Ergast API endpoints
     private transient let ERGAST_BASE_URL = "http://ergast.com/api/f1";
     private transient let CURRENT_SEASON = "2024";
+
+    // ICRC-10 Support
+    public type SupportedStandard = {
+        url: Text;
+        name: Text;
+    };
+
+    // Note: icrc10_supported_standards is already defined at the beginning of the actor
+
+    // ICRC-28 Support
+    public type Icrc28TrustedOriginsResponse = {
+        trusted_origins: [Text];
+    };
+
+    // Note: icrc28_trusted_origins is already defined at the beginning of the actor
 
     // Store user prediction
     public func storePrediction(userId: Principal, prediction: [Text]) : async Result.Result<(), Text> {
