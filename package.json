@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "build": "cd src/forecast_live_frontend && npm install --no-audit --no-fund && npm run build"
+  },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",

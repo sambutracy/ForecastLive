@@ -130,6 +130,16 @@ export function CanisterProvider({ children }: CanisterProviderProps): React.Rea
     }
   }, [isAuthenticated, user, identity]);
 
+  // Expose backendActor on window for legacy access patterns used elsewhere
+  useEffect(() => {
+    try {
+      (window as any).canisterContext = (window as any).canisterContext || {};
+      (window as any).canisterContext.backendActor = backendActor;
+    } catch (err) {
+      console.warn('Unable to set window.canisterContext', err);
+    }
+  }, [backendActor]);
+
   const initializeActor = async (): Promise<void> => {
     try {
       setLoading(true);
@@ -200,6 +210,27 @@ export function CanisterProvider({ children }: CanisterProviderProps): React.Rea
     
     // Initialize sample data
     await mockActor.initializeSampleData();
+    // Provide a simple mock usersActor to satisfy ensureUserProfile/getGroups calls from AuthContext/Dashboard
+    const mockUsersActor = {
+      ensureUserProfile: async (displayName: any, avatarUrl: any, authType: any) => {
+        // Return a minimal profile object similar to canister response
+        const profile = {
+          principal: (window as any).canisterContext?.canisterId || '2vxsx-fae',
+          displayName: displayName || 'MockUser',
+          avatarUrl: null,
+          authType: authType || 'mock',
+          createdAt: Date.now(),
+          groupsCreated: [],
+          groupsJoined: []
+        };
+        return { ok: profile };
+      },
+      getGroups: async (principal: any) => {
+        return ['Friends Group', 'Office Pool'];
+      }
+    };
+    (window as any).canisterContext = (window as any).canisterContext || {};
+    (window as any).canisterContext.usersActor = mockUsersActor;
   };
 
   // Mock actor for development

@@ -4,6 +4,9 @@ import LandingPage from './components/LandingPage';
 import PredictionUpload from './components/PredictionUpload';
 import ErrorBoundary from './components/ErrorBoundary';
 import Dashboard from './components/Dashboard';
+import ChooseGroup from './components/ChooseGroup';
+import CreateGroup from './components/CreateGroup';
+import JoinGroup from './components/JoinGroup';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CanisterProvider } from './contexts/CanisterContext';
 import { F1LiveDataProvider } from './contexts/F1LiveDataContext';
@@ -21,7 +24,22 @@ function AppContent(): JSX.Element {
     console.error('Error accessing auth context:', error);
   }
   
-  const [currentView, setCurrentView] = useState<'dashboard' | 'upload'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'upload' | 'create' | 'join'>('dashboard');
+  const [showChooseFirst, setShowChooseFirst] = useState<boolean>(false);
+
+  // Show ChooseGroup on first authenticated visit after auth completed
+  React.useEffect(() => {
+    try {
+      const auth = useAuth();
+      const seen = localStorage.getItem('forecastLive_seenChooseGroup');
+      // Only show when authenticated and auth initialization is finished
+      if (auth.isAuthenticated && (auth as any).authReady && !seen) {
+        setShowChooseFirst(true);
+      }
+    } catch (e) {
+      // ignore storage errors or auth context not available yet
+    }
+  }, [isAuthenticated]);
   
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -33,33 +51,78 @@ function AppContent(): JSX.Element {
         <>
           <Header />
           <main className="container mx-auto px-4 py-8">
-            <div className="flex justify-center mb-8">
-              <div className="bg-card rounded-lg p-2 inline-flex">
-                <button
-                  onClick={() => setCurrentView('dashboard')}
-                  className={`px-4 py-2 rounded-md transition-colors ${
-                    currentView === 'dashboard' 
-                      ? 'bg-primary text-white' 
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => setCurrentView('upload')}
-                  className={`px-4 py-2 rounded-md transition-colors ${
-                    currentView === 'upload' 
-                      ? 'bg-primary text-white' 
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Upload Prediction
-                </button>
-              </div>
-            </div>
+            {showChooseFirst ? (
+                <ChooseGroup
+                  onChooseCreate={() => {
+                    localStorage.setItem('forecastLive_seenChooseGroup', '1');
+                    setShowChooseFirst(false);
+                    setCurrentView('create');
+                  }}
+                  onChooseJoin={() => {
+                    localStorage.setItem('forecastLive_seenChooseGroup', '1');
+                    setShowChooseFirst(false);
+                    setCurrentView('join');
+                  }}
+                />
+            ) : (
+              <>
+                <div className="flex justify-center mb-8">
+                  <div className="bg-card rounded-lg p-2 inline-flex">
+                    <button
+                      onClick={() => setCurrentView('dashboard')}
+                      className={`px-4 py-2 rounded-md transition-colors ${
+                        currentView === 'dashboard'
+                          ? 'bg-primary text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Dashboard
+                    </button>
+                    <button
+                      onClick={() => setCurrentView('upload')}
+                      className={`px-4 py-2 rounded-md transition-colors ${
+                        currentView === 'upload'
+                          ? 'bg-primary text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Upload Prediction
+                    </button>
+                  </div>
+                </div>
 
-            {currentView === 'dashboard' && <Dashboard />}
-            {currentView === 'upload' && <PredictionUpload />}
+                {currentView === 'dashboard' && <Dashboard />}
+                {currentView === 'upload' && <PredictionUpload />}
+                {currentView === 'create' && (
+                  <CreateGroup
+                    onCreated={(groupId: string) => {
+                      // After creation, show share dialog informally then go to dashboard
+                      try {
+                        // show a simple share via prompt (could be replaced with a nicer modal)
+                        const shareText = `Join my group: ${groupId}`;
+                        navigator.clipboard?.writeText(shareText);
+                        alert('Group created and invite copied to clipboard: ' + shareText);
+                      } catch (e) {
+                        // ignore clipboard errors
+                        alert('Group created: ' + groupId);
+                      }
+
+                      setCurrentView('dashboard');
+                    }}
+                    onCancel={() => setCurrentView('dashboard')}
+                  />
+                )}
+                {currentView === 'join' && (
+                  <JoinGroup
+                    onJoined={(groupId: string) => {
+                      alert('Joined group: ' + groupId);
+                      setCurrentView('dashboard');
+                    }}
+                    onCancel={() => setCurrentView('dashboard')}
+                  />
+                )}
+              </>
+            )}
           </main>
         </>
       )}

@@ -11,7 +11,7 @@ import _ "mo:base/Blob";
 
 module {
   // Common types
-  public type Timestamp = Nat; // Consistent timestamp format (Unix milliseconds)
+  public type Timestamp = Int; // Consistent timestamp format (Unix milliseconds)
 
 // ---------- Identity & Profile ----------
 public type UserProfile = {
@@ -48,44 +48,52 @@ public type LeaderboardEntry = {
   createdAt: Timestamp;
 };
 
-// ---------- Predictions ----------
-public type PredictionStatus = {
-  rawScreenshotRef: Text;  // Off-canister storage reference (IPFS, bucket URL, etc.)
-  parsedOrder: ?[Text];    // e.g. ["VER","HAM",...]
-  parserConfidence: ?Float; 
-  confirmedByUser: Bool;
-  confirmedAt: ?Timestamp;
-  submittedAt: Timestamp;
-};
-
-public type PredictionRecord = {
-  id: Text;
-  user: Principal;
-  raceId: Text;
-  weekendType: Text;       // "sprint" | "normal"
-  deadlineTimestamp: Timestamp; // When predictions lock
-  status: PredictionStatus;
-};
-
-// ---------- Race & Lap Data ----------
+// ---------- Race and Prediction Data ----------
 public type RaceStatus = {
-  #scheduled;
-  #running;
+  #notStarted;
+  #inProgress;
   #finished;
-  #paused;
-};
-
-public type DriverPosition = {
-  driverCode: Text;        // "VER"
-  position: Nat;           // 1-based
-  gapFromLeaderMs: ?Nat;   // Optional timing details
-  onTrackStatus: ?Text;    // "in pit", "on lap", etc.
+  #cancelled;
+  #delayed;
 };
 
 public type LapData = {
   lapNumber: Nat;
+  positions: [DriverPosition];
   timestamp: Timestamp;
-  positions: [DriverPosition]; // Ordered by position
+};
+
+public type DriverPosition = {
+  driverId: Text;
+  position: Nat;
+  gap: ?Float;        // Time gap to leader in seconds
+  interval: ?Float;   // Time interval to car ahead in seconds
+  lastLapTime: ?Float; // Last lap time in seconds
+};
+
+// ---------- Driver Data for Live Timing ----------
+public type Driver = {
+  driverId: Text;  // Unique driver identifier
+  firstName: Text;
+  lastName: Text;
+  teamId: Text;    // Team identifier
+  number: Nat;     // Driver's car number
+  countryCode: Text; // ISO country code
+  flag: Text;      // Flag emoji or reference
+};
+
+public type DriverTiming = {
+  driver: Driver;
+  position: Nat;
+  timeGap: Text;    // Formatted gap to leader (e.g., "LEADER" or "+1.234")
+  sector1: ?Float;  // Sector 1 time in seconds
+  sector2: ?Float;  // Sector 2 time in seconds
+  sector3: ?Float;  // Sector 3 time in seconds
+  bestLap: ?Float;  // Best lap time in seconds
+  lastLap: ?Float;  // Last lap time in seconds
+  tiresAge: Nat;    // Age of current tire set in laps
+  tiresCompound: Text; // "soft", "medium", "hard", "intermediate", "wet"
+  status: Text;     // "racing", "pits", "out", "retired"
 };
 
 public type Race = {

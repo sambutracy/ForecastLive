@@ -116,8 +116,25 @@ const Dashboard: React.FC = () => {
     rank: 0,
     points: 0
   });
+
+  // User groups state
+  const [userGroups, setUserGroups] = useState<string[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState<boolean>(false);
   
   // State for lap-by-lap chart data
+  // Listen for group updates (Create/Join flows dispatch this)
+  React.useEffect(() => {
+    const handler = (ev: any) => {
+      const groupId = ev?.detail?.groupId;
+      if (groupId) {
+        // Optimistically prepend new group id
+        setUserGroups((prev) => [groupId, ...prev.filter((g) => g !== groupId)]);
+      }
+    };
+
+    window.addEventListener('groups-updated', handler as EventListener);
+    return () => window.removeEventListener('groups-updated', handler as EventListener);
+  }, []);
   const [chartData, setChartData] = useState<{
     labels: string[];
     datasets: {
@@ -200,11 +217,12 @@ const Dashboard: React.FC = () => {
   }, [simulatedLap]);
   
   useEffect(() => {
-    if (isAuthenticated && isActorAvailable && actor) {
+    if (isAuthenticated) {
       fetchUserStats();
       prepareChartData();
+      fetchUserGroups();
     }
-  }, [isAuthenticated, isActorAvailable, user]);
+  }, [isAuthenticated, isActorAvailable, actor, user]);
   
   const fetchUserStats = async (): Promise<void> => {
     try {
@@ -219,6 +237,66 @@ const Dashboard: React.FC = () => {
       });
     } catch (error) {
       console.error('Error fetching user stats:', error);
+    }
+  };
+
+  const fetchUserGroups = async (): Promise<void> => {
+    try {
+      setGroupsLoading(true);
+      // Prefer groups returned in the authenticated user's profile
+      if (user) {
+        const profileGroups: string[] | undefined = ([] as string[]).concat(user.groupsCreated || [], user.groupsJoined || []);
+        if (profileGroups && profileGroups.length > 0) {
+          setUserGroups(profileGroups);
+          return;
+        }
+      }
+      // Try backend actor first
+      if (actor && typeof actor.getUserGroups === 'function') {
+        try {
+          const principal = user?.principal;
+          if (principal) {
+            const res = await actor.getUserGroups(principal);
+            if (Array.isArray(res)) {
+              setUserGroups(res as string[]);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('actor.getUserGroups failed', e);
+        }
+      }
+
+      // Try global canisterContext usersActor
+      const usersActor = (window as any).canisterContext?.usersActor;
+      if (usersActor && typeof usersActor.getGroups === 'function') {
+        try {
+          const principal = user?.principal;
+          if (principal) {
+            const groups = await usersActor.getGroups(principal);
+            if (Array.isArray(groups)) {
+              setUserGroups(groups as string[]);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('usersActor.getGroups failed', e);
+        }
+      }
+
+      // Fallback: read from localStorage mock
+      const mock = localStorage.getItem('forecastLive_mockGroups');
+      if (mock) {
+        setUserGroups(JSON.parse(mock));
+        return;
+      }
+
+      // Default mock groups
+      setUserGroups(['Friends Group', 'Office Pool']);
+    } catch (error) {
+      console.error('Error fetching user groups:', error);
+    } finally {
+      setGroupsLoading(false);
     }
   };
   
@@ -280,27 +358,57 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column - Race Status, Prediction Comparison, Prediction Upload */}
         <div className="space-y-6">
-          {/* User Stats */}
+          {/* User Groups */}
           <div className="bg-gray-800 rounded-xl shadow-md p-4">
-            <h2 className="text-xl font-bold text-white mb-4">Your Stats</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <h3 className="text-gray-400 text-sm">Total Predictions</h3>
-                <p className="text-white text-xl font-bold">{userStats.totalPredictions}</p>
-              </div>
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <h3 className="text-gray-400 text-sm">Accuracy</h3>
-                <p className="text-white text-xl font-bold">{userStats.accuracy}%</p>
-              </div>
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <h3 className="text-gray-400 text-sm">Rank</h3>
-                <p className="text-white text-xl font-bold">#{userStats.rank}</p>
-              </div>
-              <div className="bg-gray-700 p-3 rounded-lg">
-                <h3 className="text-gray-400 text-sm">Points</h3>
-                <p className="text-white text-xl font-bold">{userStats.points}</p>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Your Groups</h2>
+              <div>
+                <button
+                  onClick={() => {
+                    // navigate to create view by setting localStorage and reloading app view
+                    localStorage.setItem('forecastLive_seenChooseGroup', '1');
+                    // trigger app-level navigation by dispatching a custom event
+                    window.dispatchEvent(new CustomEvent('navigate', { detail: { view: 'create' } }));
+                  }}
+                  className="bg-primary text-white px-3 py-1 rounded mr-2"
+                >
+                  New Group
+                </button>
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: { view: 'join' } }))}
+                  className="border border-gray-600 text-white px-3 py-1 rounded"
+                >
+                  Join
+                </button>
               </div>
             </div>
+
+            {groupsLoading ? (
+              <p className="text-gray-300">Loading groups...</p>
+            ) : userGroups.length === 0 ? (
+              <p className="text-gray-300">You haven't joined any groups yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {userGroups.map((g, idx) => (
+                  <li key={idx} className="bg-gray-700 p-3 rounded flex items-center justify-between">
+                    <div>
+                      <div className="text-white font-medium">{g}</div>
+                      <div className="text-gray-400 text-sm">Invite code: {g.toLowerCase().replace(/\s+/g, '-')}</div>
+                    </div>
+                    <div>
+                      <button
+                        onClick={() => {
+                          // simple action: copy invite to clipboard
+                          const invite = `Join my group: ${g}`;
+                          try { navigator.clipboard?.writeText(invite); alert('Invite copied'); } catch { alert(invite); }
+                        }}
+                        className="bg-blue-600 text-white px-3 py-1 rounded"
+                      >Share</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           
           {/* Prediction Comparison - Now in left column */}

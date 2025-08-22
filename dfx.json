@@ -15,21 +15,36 @@
     },
     "auth_service": {
       "main": "src/forecast_live_backend/AuthService.mo",
-      "type": "motoko"
+      "type": "motoko",
+      "declarations": {
+        "output": "src/declarations"
+      }
+    },
+    "users_service": {
+      "main": "src/forecast_live_backend/Users.mo",
+      "type": "motoko",
+      "declarations": {
+        "output": "src/declarations"
+      }
     },
     "forecast_live_backend": {
       "main": "src/forecast_live_backend/main.mo",
       "type": "motoko",
       "dependencies": [
-        "auth_service"
-      ]
+        "auth_service",
+        "users_service"
+      ],
+      "declarations": {
+        "output": "src/declarations"
+      }
     },
     "prediction_service": {
       "main": "src/forecast_live_backend/PredictionService.mo",
       "type": "motoko",
       "dependencies": [
         "f1_data_service",
-        "ai_prediction_service"
+        "ai_prediction_service",
+        "users_service"
       ]
     },
     "f1_data_service": {
@@ -46,6 +61,7 @@
         "prediction_service",
         "f1_data_service",
         "auth_service",
+        "users_service",
         "internet_identity"
       ],
       "frontend": {

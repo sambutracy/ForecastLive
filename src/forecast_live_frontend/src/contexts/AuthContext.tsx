@@ -28,6 +28,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [authType, setAuthType] = useState<AuthType>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState<boolean>(false);
 
   // Initialize authentication when component mounts
   useEffect(() => {
@@ -62,6 +63,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           
           setAuthType(storedAuthType);
           setIsAuthenticated(true);
+          setAuthReady(true);
         }
       }
     } catch (error) {
@@ -100,14 +102,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       // Set user data
       setIdentity(userIdentity);
-      setUser({
-        principal,
-        principalText,
-        authType: 'ii'
-      });
+      // Try to ensure the user's profile exists on the backend canister
+      try {
+        const usersActor = (window as any).canisterContext?.usersActor || (window as any).canisterContext?.backendActor;
+        if (usersActor && usersActor.ensureUserProfile) {
+          // Pass nulls so backend will pick defaults
+          const res = await usersActor.ensureUserProfile(null, null, 'ii');
+          if (res?.ok) {
+            const profile = res.ok;
+            setUser({
+              principal,
+              principalText,
+              authType: 'ii',
+              displayName: profile.displayName,
+              groupsCreated: profile.groupsCreated,
+              groupsJoined: profile.groupsJoined
+            });
+          } else {
+            // Fallback to minimal user object
+            setUser({ principal, principalText, authType: 'ii' });
+          }
+        } else {
+          setUser({ principal, principalText, authType: 'ii' });
+        }
+      } catch (err) {
+        console.error('ensureUserProfile error:', err);
+        setUser({ principal, principalText, authType: 'ii' });
+      }
       
-      setAuthType('ii');
-      setIsAuthenticated(true);
+  setAuthType('ii');
+  setIsAuthenticated(true);
+  setAuthReady(true);
       
       // Store auth type
       localStorage.setItem('forecastLive_authType', 'ii');
@@ -133,18 +158,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (email && password) {
         // Mock user data
         const mockPrincipal = Principal.fromText('2vxsx-fae');
-        
-        setUser({
-          principal: mockPrincipal,
-          principalText: mockPrincipal.toString(),
-          email,
-          username: email.split('@')[0],
-          authType: 'email'
-        });
+        // Try to ensure profile via canister if available, otherwise use mock
+        try {
+          const usersActor = (window as any).canisterContext?.usersActor || (window as any).canisterContext?.backendActor;
+          if (usersActor && usersActor.ensureUserProfile) {
+            const res = await usersActor.ensureUserProfile(null, null, 'email');
+            if (res?.ok) {
+              const profile = res.ok;
+              setUser({
+                principal: mockPrincipal,
+                principalText: mockPrincipal.toString(),
+                email,
+                username: email.split('@')[0],
+                authType: 'email',
+                displayName: profile.displayName,
+                groupsCreated: profile.groupsCreated,
+                groupsJoined: profile.groupsJoined
+              });
+            } else {
+              setUser({
+                principal: mockPrincipal,
+                principalText: mockPrincipal.toString(),
+                email,
+                username: email.split('@')[0],
+                authType: 'email'
+              });
+            }
+          } else {
+            setUser({
+              principal: mockPrincipal,
+              principalText: mockPrincipal.toString(),
+              email,
+              username: email.split('@')[0],
+              authType: 'email'
+            });
+          }
+        } catch (err) {
+          console.error('ensureUserProfile error (mock):', err);
+          setUser({
+            principal: mockPrincipal,
+            principalText: mockPrincipal.toString(),
+            email,
+            username: email.split('@')[0],
+            authType: 'email'
+          });
+        }
         
         setIdentity(mockPrincipal);
-        setAuthType('email');
-        setIsAuthenticated(true);
+  setAuthType('email');
+  setIsAuthenticated(true);
+  setAuthReady(true);
         
         localStorage.setItem('forecastLive_authType', 'email');
         localStorage.setItem('forecastLive_email', email);
@@ -221,6 +284,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     identity,
     loading,
     authType,
+  authReady,
     login,
     register,
     loginWithNFID,

@@ -1,3 +1,4 @@
+import F1Types "F1Types";
 import Map "mo:base/HashMap";
 import Array "mo:base/Array";
 import Result "mo:base/Result";
@@ -9,28 +10,115 @@ import Text "mo:base/Text";
 import Principal "mo:base/Principal";
 import Iter "mo:base/Iter";
 import Blob "mo:base/Blob";
-import F1Types "F1Types";
 import Random "mo:base/Random";
 import Option "mo:base/Option";
 import Nat32 "mo:base/Nat32";
 import Char "mo:base/Char";
+import Debug "mo:base/Debug";
+
+// Type aliases
+
+
+
 
 persistent actor PredictionService {
-    // Type aliases
+    // F1 2025 Calendar Mapping (raceId -> {timestamp, circuit})
+    transient let f1Calendar : [(Text, { timestamp : F1Types.Timestamp; circuit : Text })] = [
+        ("bahrain_gp", { timestamp = 1746220800000; circuit = "Bahrain International Circuit" }), // Mar 30, 2025
+        ("saudi_gp", { timestamp = 1746825600000; circuit = "Jeddah Corniche Circuit" }), // Apr 7, 2025
+        ("australia_gp", { timestamp = 1747430400000; circuit = "Albert Park" }), // Apr 14, 2025
+        ("china_gp", { timestamp = 1748035200000; circuit = "Shanghai International Circuit" }), // Apr 21, 2025
+        ("miami_gp", { timestamp = 1748640000000; circuit = "Miami International Autodrome" }), // Apr 28, 2025
+        ("imola_gp", { timestamp = 1749244800000; circuit = "Imola" }), // May 5, 2025
+        ("monaco_gp", { timestamp = 1749849600000; circuit = "Monaco" }), // May 12, 2025
+        ("spain_gp", { timestamp = 1750454400000; circuit = "Circuit de Barcelona-Catalunya" }), // May 19, 2025
+        ("canada_gp", { timestamp = 1751059200000; circuit = "Circuit Gilles Villeneuve" }), // May 26, 2025
+        ("austria_gp", { timestamp = 1751664000000; circuit = "Red Bull Ring" }), // Jun 2, 2025
+        ("britain_gp", { timestamp = 1752268800000; circuit = "Silverstone" }), // Jun 9, 2025
+        ("hungary_gp", { timestamp = 1752873600000; circuit = "Hungaroring" }), // Jun 16, 2025
+        ("belgium_gp", { timestamp = 1753478400000; circuit = "Spa-Francorchamps" }), // Jun 23, 2025
+        ("netherlands_gp", { timestamp = 1754083200000; circuit = "Zandvoort" }), // Jun 30, 2025
+        ("italy_gp", { timestamp = 1754688000000; circuit = "Monza" }), // Jul 7, 2025
+        ("azerbaijan_gp", { timestamp = 1755292800000; circuit = "Baku City Circuit" }), // Jul 14, 2025
+        ("singapore_gp", { timestamp = 1755897600000; circuit = "Marina Bay" }), // Jul 21, 2025
+        ("usa_gp", { timestamp = 1756502400000; circuit = "Circuit of the Americas" }), // Jul 28, 2025
+        ("mexico_gp", { timestamp = 1757107200000; circuit = "Autodromo Hermanos Rodriguez" }), // Aug 4, 2025
+        ("brazil_gp", { timestamp = 1757712000000; circuit = "Interlagos" }), // Aug 11, 2025
+        ("abu_dhabi_gp", { timestamp = 1758316800000; circuit = "Yas Marina Circuit" }) // Aug 18, 2025
+    ];
+
+    // Utility to get race info from calendar
+    func _getRaceCalendarInfo(raceId : Text) : ?{ timestamp : F1Types.Timestamp; circuit : Text } {
+        let found = Array.find<(Text, { timestamp : F1Types.Timestamp; circuit : Text })>(f1Calendar, func(pair) = pair.0 == raceId);
+        switch (found) {
+            case (?(_, info)) { return ?info; };
+            case (null) { return null; };
+        }
+    };
+    // (Removed duplicate type aliases from inside actor block)
+    // Type aliases (actor-scoped)
     type Timestamp = F1Types.Timestamp;
     type Group = F1Types.Group;
     type GroupId = F1Types.GroupId;
     type LeaderboardEntry = F1Types.LeaderboardEntry;
-    type PredictionRecord = F1Types.PredictionRecord;
+    type PredictionRecord = {
+        id : Text;
+        user : Principal;
+        raceId : Text;
+        weekendType : Text;
+        deadlineTimestamp : Timestamp;
+        status : {
+            rawScreenshotRef : Text;
+            parsedOrder : ?[Text];
+            parserConfidence : ?Float;
+            confirmedByUser : Bool;
+            confirmedAt : ?Timestamp;
+            submittedAt : Timestamp;
+        };
+    };
     type Race = F1Types.Race;
     type LapData = F1Types.LapData;
     type ScoringRules = F1Types.ScoringRules;
     type DriverPosition = F1Types.DriverPosition;
     type RaceStatus = F1Types.RaceStatus;
-    type UserProfile = F1Types.UserProfile;
     
-    // Default scoring rules
-    private transient let defaultScoringRules : ScoringRules = {
+    // FIA points table for positions 1-10 (25,18,15,12,10,8,6,4,2,1)
+    // These points are based on the actual position, not predicted position
+    
+    // State storage
+    // Stable arrays used for upgrades
+    private var groupsEntries : [(GroupId, Group)] = [];
+    private var predictionsEntries : [(Text, PredictionRecord)] = [];
+    private var racesEntries : [(Text, Race)] = [];
+    private var userPredictionsByRaceEntries : [(Text, [Text])] = [];
+    private var leaderboardsByGroupRaceEntries : [(Text, [LeaderboardEntry])] = [];
+
+    // Transient runtime maps
+    private transient var groups = Map.HashMap<GroupId, Group>(0, Text.equal, Text.hash);
+    private transient var predictions = Map.HashMap<Text, PredictionRecord>(0, Text.equal, Text.hash);
+    private transient var races = Map.HashMap<Text, Race>(0, Text.equal, Text.hash);
+
+    // Mapping for efficient lookups (transient)
+    private transient var userPredictionsByRace = Map.HashMap<Text, [Text]>(0, Text.equal, Text.hash);
+    private transient var leaderboardsByGroupRace = Map.HashMap<Text, [LeaderboardEntry]>(0, Text.equal, Text.hash);
+    
+    // Utility functions for array handling and number formatting
+    
+    // Extends an array of Floats with zeros to reach targetSize
+    private func _extendFloatArrayTo(arr: [Float], targetSize: Nat) : [Float] {
+        if (arr.size() >= targetSize) {
+            return arr;
+        };
+        
+        let currentSize = arr.size();
+        let extension = Array.tabulate<Float>(targetSize - currentSize, func(_) = 0.0);
+        return Array.append<Float>(arr, extension);
+    };
+    
+    // Points and scoring rules (private actor-scoped constants)
+    private let basePoints : [Nat] = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+
+    private let defaultScoringRules : ScoringRules = {
         multiplier = {
             exactMatch = 1.0;
             offBy1 = 0.5;
@@ -40,19 +128,62 @@ persistent actor PredictionService {
         };
         applyToLap = true;
     };
-    
-    // Base points for scoring
-    private transient let basePoints : [Nat] = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
-    // State storage
-    private transient var userProfiles = Map.HashMap<Principal, UserProfile>(0, Principal.equal, Principal.hash);
-    private transient var groups = Map.HashMap<GroupId, Group>(0, Text.equal, Text.hash);
-    private transient var predictions = Map.HashMap<Text, PredictionRecord>(0, Text.equal, Text.hash);
-    private transient var races = Map.HashMap<Text, Race>(0, Text.equal, Text.hash);
+    private let _POINTS_TABLE : [Nat] = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
     
-    // Mapping for efficient lookups
-    private transient var userPredictionsByRace = Map.HashMap<Text, [Text]>(0, Text.equal, Text.hash);
-    private transient var leaderboardsByGroupRace = Map.HashMap<Text, [LeaderboardEntry]>(0, Text.equal, Text.hash);
+    // Rounds a float to 2 decimal places
+    private func round2(f: Float) : Float {
+        return Float.fromInt(Int.abs(Float.toInt(f * 100.0))) / 100.0;
+    };
+    
+    // System init and upgrade hooks
+    system func preupgrade() {
+        groupsEntries := Iter.toArray(groups.entries());
+        predictionsEntries := Iter.toArray(predictions.entries());
+        racesEntries := Iter.toArray(races.entries());
+        userPredictionsByRaceEntries := Iter.toArray(userPredictionsByRace.entries());
+        leaderboardsByGroupRaceEntries := Iter.toArray(leaderboardsByGroupRace.entries());
+    };
+
+    system func postupgrade() {
+        groups := Map.fromIter<GroupId, Group>(
+            groupsEntries.vals(), 
+            groupsEntries.size(), 
+            Text.equal, 
+            Text.hash
+        );
+        predictions := Map.fromIter<Text, PredictionRecord>(
+            predictionsEntries.vals(), 
+            predictionsEntries.size(), 
+            Text.equal, 
+            Text.hash
+        );
+        races := Map.fromIter<Text, Race>(
+            racesEntries.vals(), 
+            racesEntries.size(), 
+            Text.equal, 
+            Text.hash
+        );
+        userPredictionsByRace := Map.fromIter<Text, [Text]>(
+            userPredictionsByRaceEntries.vals(), 
+            userPredictionsByRaceEntries.size(), 
+            Text.equal, 
+            Text.hash
+        );
+        leaderboardsByGroupRace := Map.fromIter<Text, [LeaderboardEntry]>(
+            leaderboardsByGroupRaceEntries.vals(), 
+            leaderboardsByGroupRaceEntries.size(), 
+            Text.equal, 
+            Text.hash
+        );
+        
+        // Clear stable variables to free memory
+        groupsEntries := [];
+        predictionsEntries := [];
+        racesEntries := [];
+        userPredictionsByRaceEntries := [];
+        leaderboardsByGroupRaceEntries := [];
+    };
     
     // Utility to generate unique IDs
     private func generateId() : async Text {
@@ -65,32 +196,7 @@ persistent actor PredictionService {
     // Convert timestamp to milliseconds (standardize on one format)
     private func timeNow() : Timestamp {
         // Convert to milliseconds
-        return Int.abs(Time.now()) / 1000000;
-    };
-    
-    // ==== User Profile Management ====
-    
-    public shared(msg) func createUserProfile(displayName : Text, avatarUrl : ?Text, authType : Text) : async Result.Result<Principal, Text> {
-        let caller = msg.caller;
-        
-        if (Principal.isAnonymous(caller)) {
-            return #err("Anonymous principals cannot create profiles");
-        };
-        
-        let newProfile : UserProfile = {
-            principal = caller;
-            displayName = displayName;
-            avatarUrl = avatarUrl;
-            createdAt = timeNow();
-            authType = authType;
-        };
-        
-        userProfiles.put(caller, newProfile);
-        return #ok(caller);
-    };
-    
-    public query func getUserProfile(user : Principal) : async ?UserProfile {
-        userProfiles.get(user)
+        Int.abs(Time.now()) / 1000000
     };
     
     // ==== Group Management ====
@@ -128,7 +234,7 @@ persistent actor PredictionService {
             name = name;
             inviteCode = inviteCode;
             members = [caller]; // Owner is automatically a member
-            createdAt = timeNow();
+            createdAt = Int.abs(timeNow());
             isPublic = isPublic;
         };
         
@@ -204,7 +310,7 @@ persistent actor PredictionService {
             case (?race) {
                 // Check if race is still accepting predictions
                 switch (race.status) {
-                    case (#running) {
+                    case (#inProgress) {
                         switch (race.latestLap) {
                             case (?lap) {
                                 if (lap > 30) {
@@ -215,8 +321,9 @@ persistent actor PredictionService {
                         };
                     };
                     case (#finished) { return #err("Race has finished"); };
-                    case (#scheduled) { }; // Allowed
-                    case (#paused) { }; // Allowed
+                    case (#notStarted) { }; // Allowed
+                    case (#cancelled) { return #err("Race was cancelled"); };
+                    case (#delayed) { return #err("Race was delayed"); };
                 };
                 
                 let predictionId = await generateId();
@@ -330,20 +437,8 @@ persistent actor PredictionService {
         };
     };
     
-    public query func getPrediction(predictionId : Text) : async ?PredictionRecord {
-        predictions.get(predictionId)
-    };
-    
-    public query func getUserPredictionsForRace(user : Principal, raceId : Text) : async [PredictionRecord] {
-        let userPreds = Iter.toArray(Iter.filter<PredictionRecord>(
-            predictions.vals(),
-            func(pred) = Principal.equal(pred.user, user) and pred.raceId == raceId
-        ));
-        
-        return userPreds;
-    };
-    
-    // ==== Race Management ====
+    // This function has been removed to resolve duplicate definition error
+    // The implementation can be found below at line ~470
     
     public shared(_) func createRace(
         raceId : Text,
@@ -362,7 +457,7 @@ persistent actor PredictionService {
             circuit = circuit;
             startTime = startTime;
             sessionType = sessionType;
-            status = #scheduled;
+            status = #notStarted;
             totalLaps = totalLaps;
             latestLap = null;
             lapHistory = [];
@@ -427,7 +522,7 @@ persistent actor PredictionService {
                     circuit = race.circuit;
                     startTime = race.startTime;
                     sessionType = race.sessionType;
-                    status = #running;
+                    status = #inProgress;
                     totalLaps = race.totalLaps;
                     latestLap = ?lapData.lapNumber;
                     lapHistory = updatedLapHistory;
@@ -477,24 +572,27 @@ persistent actor PredictionService {
                     case (null) { return #err("Race not found"); };
                     case (?race) {
                         // Check if user has a confirmed prediction
-                        let userPreds = await getUserPredictionsForRace(caller, raceId);
-                        let confirmedPreds = Array.filter<PredictionRecord>(userPreds, func(p) = p.status.confirmedByUser);
-                        
-                        if (Array.size(confirmedPreds) == 0) {
+                        // Find the user's confirmed prediction for this race
+                        let predIds = Option.get(userPredictionsByRace.get(raceId), []);
+                        let predIdOpt = Array.find<Text>(predIds, func(pid : Text) : Bool =
+                            switch (predictions.get(pid)) {
+                                case (?p) { Principal.equal(p.user, caller) and p.status.confirmedByUser };
+                                case (null) { false };
+                            }
+                        );
+                        if (Option.isNull(predIdOpt)) {
                             return #err("Must have a confirmed prediction to join leaderboard");
                         };
-                        
-                        // Get latest prediction ID (in case user has multiple)
-                        let predId = confirmedPreds[Array.size(confirmedPreds) - 1].id;
+                        let predId = Option.get(predIdOpt, "");
                         
                         // Check race status and lockout rules
                         var joinLap : Nat = 0;
                         
                         switch (race.status) {
-                            case (#scheduled) {
+                            case (#notStarted) {
                                 // Pre-race join, all good
                             };
-                            case (#running) {
+                            case (#inProgress) {
                                 switch (race.latestLap) {
                                     case (?currentLap) {
                                         if (currentLap > 30) {
@@ -510,16 +608,11 @@ persistent actor PredictionService {
                             case (#finished) {
                                 return #err("Race has finished");
                             };
-                            case (#paused) {
-                                switch (race.latestLap) {
-                                    case (?currentLap) {
-                                        if (currentLap > 30) {
-                                            return #err("Predictions are locked after lap 30");
-                                        };
-                                        joinLap := currentLap;
-                                    };
-                                    case (null) { };
-                                };
+                            case (#cancelled) {
+                                return #err("Race was cancelled");
+                            };
+                            case (#delayed) {
+                                return #err("Race was delayed");
                             };
                         };
                         
@@ -599,8 +692,11 @@ persistent actor PredictionService {
         // Extract just the driver codes from lap data positions for easier comparison
         let actualPositions = Array.map<DriverPosition, Text>(
             lapData.positions, 
-            func(dp) = dp.driverCode
+            func(dp) = dp.driverId
         );
+        
+        // Debug actual positions
+        Debug.print("Scoring for actual positions: " # Text.join(", ", Iter.fromArray(actualPositions)));
         
         // Calculate scores based on F1 points system and position accuracy
         for (i in Iter.range(0, Nat.min(predictionOrder.size() - 1, basePoints.size() - 1))) {
@@ -611,7 +707,7 @@ persistent actor PredictionService {
             var actualPosition : Nat = 999; // Default high value if not found (DNF)
             
             for (j in Iter.range(0, actualPositions.size() - 1)) {
-                if (actualPositions[j] == predictedDriver) {
+                if (Text.equal(actualPositions[j], predictedDriver)) {
                     actualPosition := j + 1; // 1-indexed
                 };
             };
@@ -640,11 +736,23 @@ persistent actor PredictionService {
                     scoringRules.multiplier.offBy3Plus
                 };
                 
-                totalScore += Float.fromInt(points) * multiplier;
+                let pointsAwarded = Float.fromInt(points) * multiplier;
+                totalScore += pointsAwarded;
+                
+                // Debug scoring for this position
+                Debug.print("Driver: " # predictedDriver # " - Predicted: " # Nat.toText(predictedPosition) # 
+                            " Actual: " # Nat.toText(actualPosition) # " Diff: " # Nat.toText(positionDiff) # 
+                            " Base Points: " # Nat.toText(points) # " Multiplier: " # Float.toText(multiplier) # 
+                            " Points Awarded: " # Float.toText(round2(pointsAwarded)));
+            } else {
+                Debug.print("Driver: " # predictedDriver # " - not found in actual positions (DNF?)");
             };
         };
         
-        return totalScore;
+        // Round the final score to 2 decimal places
+        let roundedScore = round2(totalScore);
+        Debug.print("Total lap score: " # Float.toText(roundedScore));
+        return roundedScore;
     };
     
     // Update scores for all groups for a new lap
@@ -677,39 +785,54 @@ persistent actor PredictionService {
                                                     // Update lap scores array
                                                     var newLapScores : [Float] = [];
                                                     
-                                                    // Ensure array is the right size
-                                                    let currentSize = entry.lapScores.size();
-                                                    if (currentSize < lapData.lapNumber) {
-                                                        // Fill missing laps with 0 scores
-                                                        newLapScores := Array.tabulate<Float>(
-                                                            lapData.lapNumber,
-                                                            func (i) = 
-                                                                if (i < currentSize) {
-                                                                    entry.lapScores[i]
-                                                                } else if (lapData.lapNumber > 0 and i == Nat.sub(lapData.lapNumber, 1)) {
-                                                                    lapScore
-                                                                } else {
-                                                                    0.0
-                                                                }
-                                                        );
-                                                    } else {
-                                                        // Update existing array
-                                                        newLapScores := Array.tabulate<Float>(
-                                                            currentSize,
-                                                            func (i) = 
-                                                                if (lapData.lapNumber > 0 and i == Nat.sub(lapData.lapNumber, 1)) {
-                                                                    lapScore
-                                                                } else {
-                                                                    entry.lapScores[i]
-                                                                }
-                                                        );
-                                                    };
+                                                        // Ensure array is the right size
+                                                        let currentSize = entry.lapScores.size();
+                                                        if (currentSize < lapData.lapNumber) {
+                                                            // Fill missing laps with 0 scores and set score for this lap
+                                                            newLapScores := Array.tabulate<Float>(
+                                                                lapData.lapNumber,
+                                                                func (i) = 
+                                                                    if (i < currentSize) {
+                                                                        // Copy existing scores
+                                                                        entry.lapScores[i]
+                                                                    } else if (i == Nat.sub(lapData.lapNumber, 1)) {
+                                                                        // Set score for current lap (convert from 1-indexed to 0-indexed)
+                                                                        lapScore
+                                                                    } else {
+                                                                        // Fill intermediate laps with 0
+                                                                        0.0
+                                                                    }
+                                                            );
+                                                        } else {
+                                                            // Update existing array with new score for this lap
+                                                            newLapScores := Array.tabulate<Float>(
+                                                                currentSize,
+                                                                func (i) = 
+                                                                    if (i == Nat.sub(lapData.lapNumber, 1)) {
+                                                                        // Set score for current lap (convert from 1-indexed to 0-indexed)
+                                                                        lapScore
+                                                                    } else {
+                                                                        // Keep existing scores for other laps
+                                                                        entry.lapScores[i]
+                                                                    }
+                                                            );
+                                                        };
                                                     
-                                                    // Recalculate total score
-                                                    var newTotalScore : Float = 0.0;
-                                                    for (score in newLapScores.vals()) {
-                                                        newTotalScore += score;
-                                                    };
+                                                        // Recalculate total score
+                                                        var newTotalScore : Float = 0.0;
+                                                        for (score in newLapScores.vals()) {
+                                                            newTotalScore += score;
+                                                        };
+                                                    
+                                                    // Round the total score to 2 decimal places
+                                                    newTotalScore := round2(newTotalScore);
+                                                    
+                                                    // Debug the calculation
+                                                    Debug.print("User: " # Principal.toText(entry.user) # 
+                                                               " Race: " # raceId # 
+                                                               " Lap: " # Nat.toText(lapData.lapNumber) # 
+                                                               " Score: " # Float.toText(lapScore) # 
+                                                               " Total: " # Float.toText(newTotalScore));
                                                     
                                                     // Update locked status if past lap 30
                                                     let newLocked = lapData.lapNumber > 30 or entry.locked;
@@ -798,11 +921,17 @@ persistent actor PredictionService {
                                                         var newLapScores : [Float] = [];
                                                         var newTotalScore : Float = 0.0;
                                                         
-                                                        // Filter lap history to laps before/at join lap
+                                                        // Filter lap history to laps after/equal join lap
                                                         let relevantLaps = Array.filter<LapData>(
                                                             race.lapHistory,
-                                                            func(lap) = lap.lapNumber <= entry.joinLap
+                                                            func(lap) = lap.lapNumber >= entry.joinLap
                                                         );
+                                                        
+                                                        // Debug lap calculation
+                                                        Debug.print("Recalculating scores for user: " # Principal.toText(user) # 
+                                                                   " in race: " # raceId # " joined at lap: " # 
+                                                                   Nat.toText(entry.joinLap) # " with " # 
+                                                                   Nat.toText(relevantLaps.size()) # " relevant laps");
                                                         
                                                         for (lap in relevantLaps.vals()) {
                                                             let lapScore = calculateLapScore(
@@ -816,11 +945,11 @@ persistent actor PredictionService {
                                                                 newLapScores := Array.append(newLapScores, [0.0]);
                                                             };
                                                             
-                                                            // Update score for this lap
+                                                            // Update score for this lap (1-indexed to 0-indexed array)
                                                             newLapScores := Array.tabulate<Float>(
                                                                 newLapScores.size(),
                                                                 func (i) = 
-                                                                    if (lap.lapNumber > 0 and i == Nat.sub(lap.lapNumber, 1)) {
+                                                                    if (i == Nat.sub(lap.lapNumber, 1)) {
                                                                         lapScore
                                                                     } else {
                                                                         newLapScores[i]
@@ -828,7 +957,14 @@ persistent actor PredictionService {
                                                             );
                                                             
                                                             newTotalScore += lapScore;
+                                                            Debug.print("Lap " # Nat.toText(lap.lapNumber) # " score: " # 
+                                                                        Float.toText(lapScore) # " running total: " # 
+                                                                        Float.toText(newTotalScore));
                                                         };
+                                                        
+                                                        // Round the final total score to 2 decimal places
+                                                        newTotalScore := round2(newTotalScore);
+                                                        Debug.print("Final total score: " # Float.toText(newTotalScore));
                                                         
                                                         updatedEntry := {
                                                             user = entry.user;

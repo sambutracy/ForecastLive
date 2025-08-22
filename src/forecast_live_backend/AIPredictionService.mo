@@ -16,7 +16,7 @@ import F1Types "F1Types";
 persistent actor AIPredictionService {
     // Type aliases
     type Timestamp = F1Types.Timestamp;
-    type PredictionRecord = F1Types.PredictionRecord;
+    // type PredictionRecord = F1Types.PredictionRecord;
     
     // IC Management Canister interface for HTTP outcalls
     private transient let _IC = actor "aaaaa-aa" : actor {

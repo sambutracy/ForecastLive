@@ -11,6 +11,12 @@ export interface UserData {
   authType: AuthType;
   role?: 'user' | 'admin';
   isDevelopmentUser?: boolean;
+  // Optional profile fields returned by Users canister
+  displayName?: string;
+  avatarUrl?: string | null;
+  createdAt?: number;
+  groupsCreated?: string[];
+  groupsJoined?: string[];
 }
 
 export interface AuthContextType {
@@ -20,6 +26,7 @@ export interface AuthContextType {
   loading: boolean;
   authType: AuthType;
   authError: string | null;
+  authReady: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, username: string) => Promise<boolean>;
   loginWithNFID: () => Promise<boolean>;
