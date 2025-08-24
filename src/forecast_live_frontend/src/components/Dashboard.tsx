@@ -16,6 +16,7 @@ import { useF1LiveData } from '../contexts/F1LiveDataContext';
 import { AuthType } from '../types/auth.types';
 import { Race as F1Race } from '../types/f1.types';
 import { Actor } from '@dfinity/agent';
+import { Principal } from '@dfinity/principal';
 import RaceStatus from './RaceStatus';
 import Leaderboard, { LeaderboardUser } from './Leaderboard';
 import SimplePredictionUpload from './SimplePredictionUpload';
@@ -120,6 +121,11 @@ const Dashboard: React.FC = () => {
   // User groups state
   const [userGroups, setUserGroups] = useState<string[]>([]);
   const [groupsLoading, setGroupsLoading] = useState<boolean>(false);
+  // Currently selected group for leaderboard
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  // Selected user from leaderboard and their prediction
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserPrediction, setSelectedUserPrediction] = useState<{ driverId: string; predictedPosition: number }[] | null>(null);
   
   // State for lap-by-lap chart data
   // Listen for group updates (Create/Join flows dispatch this)
@@ -223,6 +229,13 @@ const Dashboard: React.FC = () => {
       fetchUserGroups();
     }
   }, [isAuthenticated, isActorAvailable, actor, user]);
+
+  // When userGroups update, pick the first one as selected by default
+  useEffect(() => {
+    if (userGroups && userGroups.length > 0 && !selectedGroup) {
+      setSelectedGroup(userGroups[0]);
+    }
+  }, [userGroups]);
   
   const fetchUserStats = async (): Promise<void> => {
     try {
@@ -475,10 +488,80 @@ const Dashboard: React.FC = () => {
             currentLap={raceStatus.currentLap}
             totalLaps={raceStatus.totalLaps}
             status={raceStatus.status}
-            groupName="Friends Group"
+            groupName={selectedGroup || 'Friends Group'}
             actualPositions={actualPositions}
             autoSimulate={false}
+            onUserClick={async (userId: string) => {
+              setSelectedUserId(userId);
+
+              // Try to convert userId (string) to Principal where possible
+              let principalArg: Principal | null = null;
+              try {
+                principalArg = Principal.fromText(userId);
+              } catch (err) {
+                // Not a valid principal text - leave null and fall back to mock behavior
+                principalArg = null;
+              }
+
+              // Try to fetch prediction from actor (real canister) if available
+              try {
+                if (actor && typeof actor.getUserPrediction === 'function') {
+                  const res = principalArg ? await actor.getUserPrediction(principalArg) : await actor.getUserPrediction(userId as any);
+                  if (res) {
+                    setSelectedUserPrediction(res.prediction || res?.prediction || null);
+                    return;
+                  }
+                }
+              } catch (e) {
+                console.warn('actor.getUserPrediction failed', e);
+              }
+
+              // Try window canisterContext usersActor/backendActor
+              try {
+                const usersActor = (window as any).canisterContext?.backendActor || (window as any).canisterContext?.usersActor;
+                if (usersActor && typeof usersActor.getUserPrediction === 'function') {
+                  const res = principalArg ? await usersActor.getUserPrediction(principalArg) : await usersActor.getUserPrediction(userId);
+                  if (res) {
+                    setSelectedUserPrediction(res.prediction || res?.prediction || null);
+                    return;
+                  }
+                }
+              } catch (e) {
+                console.warn('usersActor.getUserPrediction failed', e);
+              }
+
+              // Fallback to mock predictions stored locally (userId keys for mock)
+              setSelectedUserPrediction(MOCK_USER_PREDICTIONS[userId] || null);
+            }}
           />
+
+          {/* Selected user prediction panel */}
+          {selectedUserId && (
+            <div className="mt-4 bg-gray-800 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-bold">{selectedUserId}'s Prediction</h3>
+                  <div className="text-sm text-gray-400">Group: {selectedGroup}</div>
+                </div>
+                <div>
+                  <button onClick={() => { setSelectedUserId(null); setSelectedUserPrediction(null); }} className="text-sm text-gray-400">Close</button>
+                </div>
+              </div>
+
+              {selectedUserPrediction ? (
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                  {selectedUserPrediction.map((p, idx) => (
+                    <div key={idx} className="bg-gray-700 p-2 rounded text-center">
+                      <div className="font-bold">{p.driverId}</div>
+                      <div className="text-sm text-gray-300">P{p.predictedPosition}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-400">No prediction available for this user.</div>
+              )}
+            </div>
+          )}
           
           {/* Upcoming Races */}
           <div className="bg-gray-800 rounded-xl shadow-md p-4">

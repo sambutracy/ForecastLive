@@ -19,6 +19,7 @@ export interface LeaderboardProps {
   groupName?: string;
   actualPositions?: { driverId: string; position: number }[];
   autoSimulate?: boolean;
+  onUserClick?: (userId: string) => void;
 }
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ 
@@ -29,7 +30,8 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
   status = "Green Flag",
   groupName = "Friends Group",
   actualPositions = [],
-  autoSimulate = false
+  autoSimulate = false,
+  onUserClick
 }) => {
   // State for managing users with animations
   const [users, setUsers] = useState<LeaderboardUser[]>(() => {
@@ -243,9 +245,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
               </div>
               
               {/* Username */}
-              <div className="col-span-7 font-medium text-white">
-                {user.username}
-              </div>
+                          <div className="col-span-7 font-medium text-white">
+                            <button
+                              onClick={() => typeof (onUserClick) === 'function' && onUserClick(user.userId)}
+                              className="text-left w-full hover:underline focus:outline-none"
+                            >
+                              {user.username}
+                            </button>
+                          </div>
               
               {/* Points */}
               <motion.div 

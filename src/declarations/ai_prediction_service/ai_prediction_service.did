@@ -1,0 +1,27 @@
+type TransformArgs = 
+ record {
+   context: blob;
+   response: HttpResponsePayload;
+ };
+type Result = 
+ variant {
+   err: text;
+   ok: vec text;
+ };
+type HttpResponsePayload = 
+ record {
+   body: vec nat8;
+   headers: vec HttpHeader;
+   status: nat;
+ };
+type HttpHeader = 
+ record {
+   name: text;
+   value: text;
+ };
+service : {
+  parseScreenshot: (predictionId: text, _screenshotUrl: text, _season: 
+   text, _circuit: text, predictionServiceId: text) -> (Result);
+  setParserConfig: (name: text, config: text) -> ();
+  transform: (raw: TransformArgs) -> (HttpResponsePayload) query;
+}

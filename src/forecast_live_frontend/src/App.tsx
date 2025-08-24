@@ -14,32 +14,27 @@ import { F1LiveDataProvider } from './contexts/F1LiveDataContext';
 function AppContent(): JSX.Element {
   console.log('AppContent rendering');
   
-  // Wrap auth context access in try/catch to handle any potential errors
-  let isAuthenticated = false;
-  try {
-    const auth = useAuth();
-    isAuthenticated = auth.isAuthenticated;
-    console.log('isAuthenticated:', isAuthenticated);
-  } catch (error) {
-    console.error('Error accessing auth context:', error);
-  }
+  // Access auth context directly
+  const auth = useAuth();
+  // Only consider the user fully authenticated when auth initialization is finished (authReady)
+  // This prevents showing the dashboard when a minimal/mock identity is set before canister enrichment.
+  const isAuthenticated = auth.isAuthenticated && auth.authReady;
+  console.log('isAuthenticated:', isAuthenticated);
   
   const [currentView, setCurrentView] = useState<'dashboard' | 'upload' | 'create' | 'join'>('dashboard');
   const [showChooseFirst, setShowChooseFirst] = useState<boolean>(false);
 
-  // Show ChooseGroup on first authenticated visit after auth completed
+  // Show ChooseGroup on first authenticated visit after auth initialization completes
   React.useEffect(() => {
-    try {
-      const auth = useAuth();
-      const seen = localStorage.getItem('forecastLive_seenChooseGroup');
-      // Only show when authenticated and auth initialization is finished
-      if (auth.isAuthenticated && (auth as any).authReady && !seen) {
-        setShowChooseFirst(true);
-      }
-    } catch (e) {
-      // ignore storage errors or auth context not available yet
+    const seen = localStorage.getItem('forecastLive_seenChooseGroup');
+    // Only show when authenticated and auth initialization is finished
+    // - show if user hasn't seen the chooser yet, OR
+    // - show if the authenticated user has no joined groups (so they can create/join)
+    const hasGroups = Array.isArray(auth.user?.groupsJoined) && auth.user!.groupsJoined.length > 0;
+    if (auth.isAuthenticated && auth.authReady && (!seen || !hasGroups)) {
+      setShowChooseFirst(true);
     }
-  }, [isAuthenticated]);
+  }, [auth.isAuthenticated, auth.authReady]);
   
   return (
     <div className="min-h-screen bg-gray-900 text-white">

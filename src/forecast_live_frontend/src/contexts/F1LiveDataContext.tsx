@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useCanister } from './CanisterContext';
+import { Principal } from '@dfinity/principal';
 import { io, Socket } from 'socket.io-client';
 import appConfig from '../config/appConfig';
 import { Race, LiveRaceData, UserPrediction, LeaderboardEntry } from '../types/f1.types';
@@ -122,12 +123,25 @@ export const F1LiveDataProvider: React.FC<F1LiveDataProviderProps> = ({ children
   // Fetch user predictions
   const fetchUserPredictions = useCallback(async (userId: string): Promise<void> => {
     if (!predictionService) return;
-    
+
     try {
       setIsLoading(true);
       setError(null);
-      
-      const predictions = await predictionService.getUserPredictions(userId);
+
+      // Try to convert a textual principal to a Principal object when possible.
+      let principalArg: Principal | null = null;
+      try {
+        principalArg = Principal.fromText(userId);
+      } catch (e) {
+        // If conversion fails, we'll log and fall back to passing the raw id.
+        console.warn('fetchUserPredictions: userId is not a valid Principal text, falling back to raw id', userId);
+        principalArg = null;
+      }
+
+      const predictions = principalArg
+        ? await predictionService.getUserPredictions(principalArg)
+        : await predictionService.getUserPredictions(userId);
+
       setUserPredictions(predictions);
     } catch (err) {
       console.error('Error fetching user predictions:', err);

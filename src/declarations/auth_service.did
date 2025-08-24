@@ -1,0 +1,41 @@
+type UserProfile = 
+ record {
+   authType: text;
+   createdAt: int;
+   email: opt text;
+   "principal": principal;
+   role: text;
+   username: text;
+ };
+type Result = 
+ variant {
+   err: text;
+   ok: UserProfile;
+ };
+type LoginResult = 
+ variant {
+   error: text;
+   success: record {
+              token: text;
+              user: UserProfile;
+            };
+ };
+service : {
+  authenticateWithII: () -> (Result);
+  createInitialAdmin: (email: text, password: text, username: text) -> (bool);
+  getAllUsers: () -> (vec UserProfile);
+  getUserByToken: (token: text) -> (opt UserProfile) query;
+  icrc10_supported_standards: () ->
+   (vec record {
+          name: text;
+          url: text;
+        }) query;
+  icrc28_trusted_origins: () -> (record {trusted_origins: vec text;}) query;
+  login: (email: text, password: text) -> (LoginResult);
+  logout: (token: text) -> (bool);
+  promoteToAdmin: ("principal": principal) -> (bool);
+  register: (email: text, password: text, username: text) -> (Result);
+  updateIIUserProfile: (username: text) -> (Result);
+  verifySession: (token: text) -> (bool) query;
+  whoami: () -> (Result);
+}

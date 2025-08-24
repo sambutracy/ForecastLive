@@ -64,6 +64,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setAuthType(storedAuthType);
           setIsAuthenticated(true);
           setAuthReady(true);
+    // Try to enrich the user profile from the canister when it becomes available
+    tryEnsureUserProfileWhenAvailable(principal, principalText, storedAuthType);
         }
       }
     } catch (error) {
@@ -95,47 +97,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Start the login flow
       await authClient.login(iiConfig);
       
-      // After successful login
-      const userIdentity = authClient.getIdentity();
-      const principal = userIdentity.getPrincipal();
-      const principalText = principal.toString();
-      
-      // Set user data
-      setIdentity(userIdentity);
-      // Try to ensure the user's profile exists on the backend canister
-      try {
-        const usersActor = (window as any).canisterContext?.usersActor || (window as any).canisterContext?.backendActor;
-        if (usersActor && usersActor.ensureUserProfile) {
-          // Pass nulls so backend will pick defaults
-          const res = await usersActor.ensureUserProfile(null, null, 'ii');
-          if (res?.ok) {
-            const profile = res.ok;
-            setUser({
-              principal,
-              principalText,
-              authType: 'ii',
-              displayName: profile.displayName,
-              groupsCreated: profile.groupsCreated,
-              groupsJoined: profile.groupsJoined
-            });
-          } else {
-            // Fallback to minimal user object
-            setUser({ principal, principalText, authType: 'ii' });
-          }
-        } else {
-          setUser({ principal, principalText, authType: 'ii' });
-        }
-      } catch (err) {
-        console.error('ensureUserProfile error:', err);
-        setUser({ principal, principalText, authType: 'ii' });
-      }
-      
+  // After successful login
+  const userIdentity = authClient.getIdentity();
+  const principal = userIdentity.getPrincipal();
+  const principalText = principal.toString();
+
+  // Set identity and a minimal user immediately so UI can update
+  setIdentity(userIdentity);
+  setUser({ principal, principalText, authType: 'ii' });
+
   setAuthType('ii');
   setIsAuthenticated(true);
   setAuthReady(true);
-      
-      // Store auth type
-      localStorage.setItem('forecastLive_authType', 'ii');
+
+  // Store auth type
+  localStorage.setItem('forecastLive_authType', 'ii');
+
+  // Attempt to enrich the user profile via canister when it becomes available
+  tryEnsureUserProfileWhenAvailable(principal, principalText, 'ii');
       
       return true;
     } catch (error) {
@@ -204,13 +183,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
           });
         }
         
-        setIdentity(mockPrincipal);
+  setIdentity(mockPrincipal);
   setAuthType('email');
   setIsAuthenticated(true);
   setAuthReady(true);
-        
-        localStorage.setItem('forecastLive_authType', 'email');
-        localStorage.setItem('forecastLive_email', email);
+
+  localStorage.setItem('forecastLive_authType', 'email');
+  localStorage.setItem('forecastLive_email', email);
+
+  // If a canister usersActor becomes available later, try to enrich the profile
+  tryEnsureUserProfileWhenAvailable(mockPrincipal, mockPrincipal.toString(), 'email');
         
         return true;
       }
@@ -292,6 +274,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logout,
     authError
   };
+
+  // Poll for usersActor availability and call ensureUserProfile to enrich user data
+  async function tryEnsureUserProfileWhenAvailable(principal: any, principalText: string, authType: AuthType) {
+    const start = Date.now();
+    const timeout = 8_000; // 8 seconds
+
+    const attempt = async () => {
+      try {
+        const usersActor = (window as any).canisterContext?.usersActor || (window as any).canisterContext?.backendActor;
+        if (usersActor && usersActor.ensureUserProfile) {
+          const res = await usersActor.ensureUserProfile(null, null, authType);
+          if (res?.ok) {
+            const profile = res.ok;
+            setUser((prev) => ({
+              principal,
+              principalText,
+              authType,
+              displayName: profile.displayName,
+              groupsCreated: profile.groupsCreated,
+              groupsJoined: profile.groupsJoined
+            }));
+          }
+          return;
+        }
+      } catch (err) {
+        console.warn('ensureUserProfile attempt failed:', err);
+      }
+
+      if (Date.now() - start < timeout) {
+        setTimeout(attempt, 500);
+      } else {
+        // Give up after timeout
+        return;
+      }
+    };
+
+    attempt();
+  }
 
   return (
     <AuthContext.Provider value={value}>

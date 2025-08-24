@@ -55,3 +55,18 @@ body {
     white-space: pre-wrap;
   }
 }
+/* LandingPage-specific utilities moved from component file */
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+.animate-marquee {
+  animation: marquee 15s linear infinite;
+  display: inline-block;
+}
+
+/* Progress bar sample widths used by LandingPage */
+.users-bar-width { width: 60%; }
+.predictions-bar-width { width: 75%; }
+.races-bar-width { width: 40%; }
+
