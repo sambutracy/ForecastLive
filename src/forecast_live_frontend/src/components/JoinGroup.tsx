@@ -45,30 +45,36 @@ export default function JoinGroup({ onJoined, onCancel }: Props) {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-gradient-to-br from-gray-800/60 via-gray-900 to-black/60 p-1 rounded-xl shadow-xl">
-      <div className="bg-card p-6 rounded-lg">
-        <h2 className="text-2xl font-extrabold mb-2">Join a group</h2>
-        <p className="text-gray-300 mb-4">Enter the invite code or group id you received from a friend.</p>
+    <div className="max-w-md mx-auto bg-card p-6 rounded-xl shadow-lg">
+      <h2 className="text-2xl font-extrabold mb-2">Join a group</h2>
+      <p className="text-gray-300 mb-4">Enter the invite code or group id you received from a friend.</p>
 
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          join();
+        }}
+      >
         <label className="block text-sm text-gray-400 mb-2">Invite code or Group ID</label>
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          className="w-full p-3 rounded bg-gray-800 mb-4 placeholder-gray-500"
+          className="w-full p-3 rounded bg-gray-800 mb-4 placeholder-gray-500 focus:ring-2 focus:ring-primary/30 outline-none"
           placeholder="e.g. grp-abc123 or invite code"
+          aria-label="Invite code or group id"
         />
 
         {error && <div className="text-red-400 mb-3">{error}</div>}
 
         <div className="flex space-x-3">
-          <button onClick={join} disabled={loading} className="flex-1 bg-primary text-white px-4 py-3 rounded-lg shadow-md">
+          <button type="submit" disabled={loading} className="flex-1 bg-primary text-white px-4 py-3 rounded-lg shadow">
             {loading ? 'Joining...' : 'Join Group'}
           </button>
-          <button onClick={onCancel} disabled={loading} className="border border-gray-700 text-white px-4 py-3 rounded-lg">
+          <button type="button" onClick={onCancel} disabled={loading} className="border border-gray-700 text-white px-4 py-3 rounded-lg">
             Cancel
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

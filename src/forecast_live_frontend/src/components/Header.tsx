@@ -1,4 +1,4 @@
-import React, { JSX, useState } from 'react';
+import React, { JSX, useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Principal } from '@dfinity/principal';
 
@@ -12,12 +12,24 @@ const Header: React.FC = () => {
   const { isAuthenticated, user, logout, loading, authType } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
   const [showUserMenu, setShowUserMenu] = useState<boolean>(false);
+  const userButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    // Set a string literal on the DOM to satisfy static ARIA analyzers
+    if (userButtonRef.current) {
+      userButtonRef.current.setAttribute('aria-expanded', showUserMenu ? 'true' : 'false');
+    }
+  }, [showUserMenu]);
   
   // Format principal for display
   const formatPrincipal = (principal: Principal | string | undefined): string => {
     if (!principal) return '';
-    const text = principal.toString();
-    return text.slice(0, 5) + '...' + text.slice(-3);
+    try {
+      const text = typeof principal === 'string' ? principal : principal.toString();
+      return text.length > 12 ? text.slice(0, 6) + '...' + text.slice(-4) : text;
+    } catch (e) {
+      return '';
+    }
   };
   
   // Handle logout with loading state
@@ -114,31 +126,28 @@ const Header: React.FC = () => {
           
           {isAuthenticated && (
             <div className="flex items-center space-x-4 relative">
-              <div 
+              <button
+                type="button"
                 className="flex items-center bg-gray-800 rounded-full px-3 py-1 cursor-pointer hover:bg-gray-700"
                 onClick={() => setShowUserMenu(!showUserMenu)}
+                ref={userButtonRef}
+                aria-haspopup="menu"
+                aria-controls="user-menu"
               >
-                <span className="text-xs text-gray-400 mr-1">
-                  {userInfo.name}:
+                <span className="text-sm font-medium text-white mr-3">
+                  {userInfo.name}
                 </span>
-                <span className="text-sm font-medium text-white">
-                  {userInfo.id}
-                </span>
+                <span className="text-xs text-gray-400 font-mono">{formatPrincipal(user?.principal)}</span>
                 {getAuthTypeBadge(userInfo.authType)}
-                {user?.role === 'admin' && (
-                  <span className="ml-2 text-xs bg-amber-900/50 text-amber-400 px-1.5 py-0.5 rounded">
-                    Admin
-                  </span>
-                )}
-              </div>
-              
+              </button>
+
               {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-gray-700 rounded-md shadow-lg z-10">
-                  <div className="p-2 border-b border-gray-700">
+                <div id="user-menu" className="absolute right-0 top-full mt-2 w-56 bg-card border border-gray-700 rounded-md shadow-lg z-10">
+                  <div className="p-3 border-b border-gray-700">
                     <div className="text-sm font-medium text-white">{userInfo.name}</div>
                     <div className="text-xs text-gray-400 truncate">{user?.principal?.toString() || ''}</div>
                   </div>
-                  <div className="p-1">
+                  <div className="p-2">
                     <button
                       onClick={handleLogout}
                       disabled={isLoggingOut}
@@ -149,18 +158,6 @@ const Header: React.FC = () => {
                   </div>
                 </div>
               )}
-              
-              <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className={`${
-                  isLoggingOut 
-                    ? 'bg-gray-800 text-gray-500' 
-                    : 'bg-red-900/30 hover:bg-red-900/50 text-red-400 hover:text-red-300'
-                } px-3 py-1 rounded-md text-sm font-medium transition-colors`}
-              >
-                {isLoggingOut ? 'Logging out...' : 'Logout'}
-              </button>
             </div>
           )}
           

@@ -215,7 +215,8 @@ export function CanisterProvider({ children }: CanisterProviderProps): React.Rea
       ensureUserProfile: async (displayName: any, avatarUrl: any, authType: any) => {
         // Return a minimal profile object similar to canister response
         const profile = {
-          principal: (window as any).canisterContext?.canisterId || '2vxsx-fae',
+          // Do not expose a development principal; return null principal to avoid accidental auth bypass
+          principal: null,
           displayName: displayName || 'MockUser',
           avatarUrl: null,
           authType: authType || 'mock',

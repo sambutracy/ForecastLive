@@ -29,6 +29,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [authType, setAuthType] = useState<AuthType>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState<boolean>(false);
+  const DEVELOPMENT_PRINCIPAL = '2vxsx-fae';
+  const isDevelopment = (typeof window !== 'undefined') && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    process.env.NODE_ENV !== 'production'
+  );
 
   // Initialize authentication when component mounts
   useEffect(() => {
@@ -53,19 +59,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const userIdentity = authClient.getIdentity();
           const principal = userIdentity.getPrincipal();
           const principalText = principal.toString();
-          
+
+          // Block development principal from authenticating in production only.
+          if (principalText === DEVELOPMENT_PRINCIPAL && !isDevelopment) {
+            console.warn('Detected development principal; blocking authentication.');
+            try {
+              await authClient.logout();
+            } catch (e) {
+              console.warn('Failed to logout development principal', e);
+            }
+            // Clear any stored auth so initAuth won't immediately retry with the same value
+            localStorage.removeItem('forecastLive_authType');
+            setAuthError('Development principal is not permitted. Please sign in with a real Internet Identity.');
+            return;
+          }
+          if (principalText === DEVELOPMENT_PRINCIPAL && isDevelopment) {
+            console.warn('Development principal detected but allowed in development mode.');
+          }
+
           setIdentity(userIdentity);
           setUser({
             principal,
             principalText,
             authType: storedAuthType
           });
-          
+
           setAuthType(storedAuthType);
           setIsAuthenticated(true);
           setAuthReady(true);
-    // Try to enrich the user profile from the canister when it becomes available
-    tryEnsureUserProfileWhenAvailable(principal, principalText, storedAuthType);
+          // Try to enrich the user profile from the canister when it becomes available
+          tryEnsureUserProfileWhenAvailable(principal, principalText, storedAuthType);
         }
       }
     } catch (error) {
@@ -96,25 +119,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       // Start the login flow
       await authClient.login(iiConfig);
-      
-  // After successful login
-  const userIdentity = authClient.getIdentity();
-  const principal = userIdentity.getPrincipal();
-  const principalText = principal.toString();
 
-  // Set identity and a minimal user immediately so UI can update
-  setIdentity(userIdentity);
-  setUser({ principal, principalText, authType: 'ii' });
+      // After successful login, validate principal before setting auth state
+      const userIdentity = authClient.getIdentity();
+      const principal = userIdentity.getPrincipal();
+      const principalText = principal.toString();
 
-  setAuthType('ii');
-  setIsAuthenticated(true);
-  setAuthReady(true);
+      // Block development principal in production only. Allow it for local development so
+      // the app can be tested against a local replica or dev identities.
+      if (principalText === DEVELOPMENT_PRINCIPAL && !isDevelopment) {
+        console.warn('Internet Identity returned development principal; blocking authentication.');
+        try {
+          await authClient.logout();
+        } catch (e) {
+          console.warn('Failed to logout development principal after II login', e);
+        }
+        // Ensure stored auth is cleared so initAuth doesn't immediately re-block
+        localStorage.removeItem('forecastLive_authType');
+        setAuthError('Development principal is not permitted. Please use a real Internet Identity.');
+        return false;
+      }
+      if (principalText === DEVELOPMENT_PRINCIPAL && isDevelopment) {
+        console.warn('Development principal returned by II and allowed in development mode.');
+      }
 
-  // Store auth type
-  localStorage.setItem('forecastLive_authType', 'ii');
+      // Set identity and a minimal user immediately so UI can update
+      setIdentity(userIdentity);
+      setUser({ principal, principalText, authType: 'ii' });
 
-  // Attempt to enrich the user profile via canister when it becomes available
-  tryEnsureUserProfileWhenAvailable(principal, principalText, 'ii');
+      setAuthType('ii');
+      setIsAuthenticated(true);
+      setAuthReady(true);
+
+      // Store auth type
+      localStorage.setItem('forecastLive_authType', 'ii');
+
+      // Attempt to enrich the user profile via canister when it becomes available
+      tryEnsureUserProfileWhenAvailable(principal, principalText, 'ii');
       
       return true;
     } catch (error) {
@@ -128,105 +169,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Login with email
   const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      setLoading(true);
-      setAuthError(null);
-      
-      // Simple mock login for demonstration
-      // In a real app, you would call your backend
-      if (email && password) {
-        // Mock user data
-        const mockPrincipal = Principal.fromText('2vxsx-fae');
-        // Try to ensure profile via canister if available, otherwise use mock
-        try {
-          const usersActor = (window as any).canisterContext?.usersActor || (window as any).canisterContext?.backendActor;
-          if (usersActor && usersActor.ensureUserProfile) {
-            const res = await usersActor.ensureUserProfile(null, null, 'email');
-            if (res?.ok) {
-              const profile = res.ok;
-              setUser({
-                principal: mockPrincipal,
-                principalText: mockPrincipal.toString(),
-                email,
-                username: email.split('@')[0],
-                authType: 'email',
-                displayName: profile.displayName,
-                groupsCreated: profile.groupsCreated,
-                groupsJoined: profile.groupsJoined
-              });
-            } else {
-              setUser({
-                principal: mockPrincipal,
-                principalText: mockPrincipal.toString(),
-                email,
-                username: email.split('@')[0],
-                authType: 'email'
-              });
-            }
-          } else {
-            setUser({
-              principal: mockPrincipal,
-              principalText: mockPrincipal.toString(),
-              email,
-              username: email.split('@')[0],
-              authType: 'email'
-            });
-          }
-        } catch (err) {
-          console.error('ensureUserProfile error (mock):', err);
-          setUser({
-            principal: mockPrincipal,
-            principalText: mockPrincipal.toString(),
-            email,
-            username: email.split('@')[0],
-            authType: 'email'
-          });
-        }
-        
-  setIdentity(mockPrincipal);
-  setAuthType('email');
-  setIsAuthenticated(true);
-  setAuthReady(true);
-
-  localStorage.setItem('forecastLive_authType', 'email');
-  localStorage.setItem('forecastLive_email', email);
-
-  // If a canister usersActor becomes available later, try to enrich the profile
-  tryEnsureUserProfileWhenAvailable(mockPrincipal, mockPrincipal.toString(), 'email');
-        
-        return true;
-      }
-      
-      throw new Error('Invalid credentials');
-    } catch (error) {
-      console.error('Email login error:', error);
-      setAuthError(`Login failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      return false;
-    } finally {
-      setLoading(false);
-    }
+  // Email/password authentication is intentionally disabled.
+  setAuthError('Email login is disabled. Please use Internet Identity to sign in.');
+  setLoading(false);
+  return false;
   };
 
   // Register with email
   const register = async (email: string, password: string, username: string): Promise<boolean> => {
-    try {
-      setLoading(true);
-      setAuthError(null);
-      
-      // In a real app, you would call your backend to register
-      if (email && password && username) {
-        // Auto-login after registration
-        return await login(email, password);
-      }
-      
-      throw new Error('Registration information incomplete');
-    } catch (error) {
-      console.error('Registration error:', error);
-      setAuthError(`Registration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      return false;
-    } finally {
-      setLoading(false);
-    }
+  // Registration via email is disabled. Use Internet Identity.
+  setAuthError('Registration is disabled. Please use Internet Identity to sign in.');
+  setLoading(false);
+  return false;
   };
 
   // Logout function
